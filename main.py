@@ -460,12 +460,19 @@ def suggerisci_pasto():
 def main():
     st.title("DietApp Web Version!")
     st.write("Benvenuta/o! Questa applicazione ha diverse funzioni:")
-    
-    # Sezione per suggerimenti pasto
-    st.subheader("🍽️ Suggerimento per il prossimo pasto")
-    messaggio_pasto = suggerisci_pasto()
-    st.write(messaggio_pasto)
 
+    # Layout a colonne per posizionare il bottone in alto a destra
+    col1, col2 = st.columns([3, 1])
+
+    with col2:
+        # Bottone per andare alla pagina di caricamento
+        if st.button("📤 Carica la tua Dieta"):
+            st.switch_page("pages/Upload_diet.py")
+
+    # Sezione per suggerimento del prossimo pasto
+    st.subheader("🍽️ Suggerimento per il prossimo pasto")
+    st.write(suggerisci_pasto())
+    
     # Prima espansione: Elaborazione lista della spesa
     with st.expander("1. Elaborazione automatica della lista della spesa in base agli alimenti in dispensa", expanded=False):
         st.subheader("Seleziona i giorni per cui vuoi fare spesa!")
@@ -499,38 +506,45 @@ def main():
 
     # Bottone per calcolare la lista della spesa
     if st.button("✔️ Submit List"):
-        lista_spesa = {k: v for k, v in dict_to_fill.items() if v > 0}
+        if "lista_spesa" not in st.session_state:
+            st.session_state["lista_spesa"] = {}
+        # Aggiorna la lista della spesa nello stato della sessione
+        st.session_state["lista_spesa"] = {k: v for k, v in dict_to_fill.items() if v > 0}
+
+    # Recupera la lista della spesa dallo stato della sessione
+    if "lista_spesa" not in st.session_state:
+        st.session_state["lista_spesa"] = {}
+
+    lista_spesa = st.session_state["lista_spesa"]
+
+    # Mostra la lista della spesa interattiva
+    st.subheader("🛒 Lista della spesa:")
+    if len(lista_spesa) > 0:
+        col1, col2 = st.columns(2)
+        chiavi_eliminati = []
+
+        # Cicla sugli elementi della lista e mostra in due colonne
+        for i, (alimento, quantita) in enumerate(lista_spesa.items()):
+            col = col1 if i % 2 == 0 else col2
+            emoji_name = get_food_emoji(alimento)
+            unit = get_food_unit(alimento)
+
+            with col:
+                # Usa un pulsante per eliminare l'elemento invece di una checkbox
+                if st.checkbox(f"{emoji_name} {alimento.replace('_', ' ')}: {quantita} {unit}", key=f"remove_{alimento}"):
+                    chiavi_eliminati.append(alimento)
+
+        # Rimuove gli elementi selezionati
+        for chiave in chiavi_eliminati:
+            del lista_spesa[chiave]
+
+        # Aggiorna lo stato della sessione
         st.session_state["lista_spesa"] = lista_spesa
 
-        # Recupera la lista della spesa dallo stato della sessione
-        lista_spesa = st.session_state.get("lista_spesa", {})
-
-        # Mostra la lista della spesa interattiva
-        st.subheader("🛒 Lista della spesa interattiva:")
-        if len(lista_spesa) > 0:
-            col1, col2 = st.columns(2)
-            chiavi_eliminati = []
-
-            # Cicla sugli elementi della lista e mostra in due colonne
-            for i, (alimento, quantita) in enumerate(lista_spesa.items()):
-                col = col1 if i % 2 == 0 else col2
-                emoji_name = get_food_emoji(alimento)
-                unit = get_food_unit(alimento)
-
-                with col:
-                    if st.checkbox(f"{emoji_name} {alimento.replace('_', ' ')}: {quantita} {unit}", key=f"check_{alimento}"):
-                        chiavi_eliminati.append(alimento)
-
-            # Rimuove gli elementi selezionati
-            for chiave in chiavi_eliminati:
-                del lista_spesa[chiave]
-
-            st.session_state["lista_spesa"] = lista_spesa
-
-            if len(lista_spesa) == 0:
-                st.success("🎉 Hai completato tutta la lista della spesa!")
-        else:
-            st.success("🎉 Hai già tutto il necessario in dispensa!")
+        if len(lista_spesa) == 0:
+            st.success("🎉 Hai completato tutta la lista della spesa!")
+    else:
+        st.warning("Lista della spesa non ancora generata")
     
     st.divider()
 
