@@ -79,39 +79,56 @@ def process_diet_pdf(context, question):
 
 
 
-def parse_meals_with_llm(lines,list_days,n_value = 5):
+def parse_meals_with_llm(lines,list_days):
 
     # Esegui il task di question answering per estrarre i pasti
     answers = {}
     
-    max_length = 500  # Imposta il numero di caratteri che desideri
-    n_value = 5       # Numero di righe da cui partire
+    def chunk_text_by_day(lines):
+        """
+        Segmenta il testo in base ai giorni della settimana.
+        """
+        chunks = {}
+        current_day = None
+        current_chunk = []
 
+        for line in lines:
+            # Cerca i giorni della settimana nel testo
+            for day in list_of_days:
+                if day.lower()[:-1] in line.lower():
+                    # Se c'era un giorno precedente, aggiungi il chunk
+                    if current_day:
+                        if current_day in chunks:
+                            chunks[current_day].append("\n".join(current_chunk))
+                        else:
+                            chunks[current_day] = ["\n".join(current_chunk)]  # Aggiungi un nuovo chunk se non esiste
+                    # Imposta il nuovo giorno e inizia un nuovo chunk
+                    current_day = day
+                    current_chunk = [line]
+                    break  # Esci dal ciclo dei giorni, in modo da non aggiungere la riga al chunk
+            else:  # Se nessun giorno è stato trovato nella riga
+                if current_day:
+                    current_chunk.append(line)
+
+        # Aggiungi l'ultimo giorno
+        if current_day:
+            if current_day in chunks:
+                chunks[current_day].append("\n".join(current_chunk))
+            else:
+                chunks[current_day] = ["\n".join(current_chunk)]
+
+        return chunks
+
+    print(lines)
+    chunks = chunk_text_by_day(lines)
+    print(chunks.keys())
     for day in list_days:
-      answers[day] = {}
-      for ind, el in enumerate(lines):
-          if day.lower() in el.lower():
-              relevant_ind = ind
-
-      # Trova l'inizio del "chunk" a partire da n_value righe prima dell'indice trovato
-      lower_index = relevant_ind - n_value if relevant_ind - n_value >= 0 else 0
-
-      # Iniziamo a prendere il testo dal lower_index e espandiamo solo verso il basso
-      context = ""
-      while len(context) < max_length and lower_index < len(lines):
-          context += lines[lower_index] + "\n"
-          lower_index += 1
-
-      # Se il "chunk" è più lungo di max_length, lo troncano
-      context = context[:max_length] if len(context) > max_length else context
-
-      print(context)
-
-      for meal in ["Colazione", "Pranzo", "Cena", "SpuntinoMattina","SpuntinoPomeriggio"]:
-          question = f"Cosa devo mangiare di {day} per {meal}?"
-          answer = process_diet_pdf(context,question)
-          answers[day][meal]=answer
-          print(f"{day}-{meal}: {answer}")
+        answers[day]={}
+        for meal in ["Colazione", "Pranzo", "Cena", "SpuntinoMattina","SpuntinoPomeriggio"]:
+            question = f"Cosa devo mangiare di {day} per {meal}?"
+            answer = process_diet_pdf(chunks[day],question)
+            answers[day][meal]=answer
+            print(f"{day}-{meal}: {answer}")
       
 
     # Restituisci il dizionario con le risposte per il giorno specificato
