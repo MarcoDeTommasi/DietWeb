@@ -1,18 +1,24 @@
+from huggingface_hub import InferenceClient
 import streamlit as st
 import fitz
-import tempfile
 import os
-#from langchain_community.document_loaders.pdf import PyPDFLoader
-from langchain_community.chat_models import ChatOllama
 
+# Configurazione del client Hugging Face
+client = InferenceClient(
+    model="mistralai/Mistral-7B-Instruct-v0.3",  # Modello specificato
+    token="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",  # Sostituisci con il tuo token
+    timeout=120  # Timeout per richieste lunghe
+)
+
+# Template del prompt
 template = """Ti darò un piano alimentare personalizzato per un utente. In questo piano sono presenti le linee guida alimentari per ogni giorno della settimana e per ogni pasto.
-Ti chiederò cosa è consigliato mangiare per un dato pasto in un dato giorno e tu devi rispondere elencanto i cibi e le quantità riportate.
+Ti chiederò cosa è consigliato mangiare per un dato pasto in un dato giorno e tu devi rispondere elencando i cibi e le quantità riportate.
 
 Ogni giorno ha questi possibili pasti:
 
 ['Colazione','Spuntino','Pranzo','Cena']
 
-NOTA: riportami 2 spuntini, uno mattutino e uno pomeridiano, 
+NOTA: riportami 2 spuntini, uno mattutino e uno pomeridiano,
 se ti chiedo di parlare di uno spuntino e aggiungo mattutino o pomeridiano riportami rispettivamente quello fra la colazione e il pranzo e quello fra il pranzo e la cena
 
 NOTA: riportami la risposta come una lista Python.
@@ -20,7 +26,7 @@ NOTA: riportami la risposta come una lista Python.
 DEVI Rispettare questo formato, la quantità e sempre riportata:
 [ 'alimento1 quantita', 'alimento2 quantita', 'alimento3 quantita']
 
-Riporta solo il tipo di alimenti e la quatità, evita aggettivi:
+Riporta solo il tipo di alimenti e la quantità, evita aggettivi:
 
 Es. Latte parzialmente scremato 200ml -> Latte 200ml
 Es. Yogurt Greco 150g-> Yogurt 150g
@@ -34,7 +40,6 @@ riportami solo i cibi relativi al pasto indicato.
 
 IMPORTANTE: EVITA LE ALTERNATIVE
 
-
 NOTA: NON FORNIRE ALTRO TESTO OLTRE ALLA LISTA
 
 {context}
@@ -42,27 +47,36 @@ NOTA: NON FORNIRE ALTRO TESTO OLTRE ALLA LISTA
 Question: {question}
 """
 
-list_of_days = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica']
-def process_diet_pdf(context, question):
+# Lista dei giorni della settimana
+list_of_days = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica']
 
+def process_diet_pdf(context, question):
+    """
+    Processa la richiesta dietetica utilizzando Hugging Face API.
+    """
     # Prepara il prompt personalizzato
     custom_prompt = template.format(context=context, question=question)
 
-    # Inizializza il modello LLM
-    llm = ChatOllama(model='llama3', temperature=0.01)
-
-    # Utilizza il metodo `invoke` per interrogare il modello
+    # Struttura del messaggio
     messages = [
-        ("system", "You are a helpful assistant. Use the given context to answer questions accurately."),
-        ("human", custom_prompt)
+        {"role": "system", "content": "You are a helpful assistant. Use the given context to answer questions accurately."},
+        {"role": "user", "content": custom_prompt}
     ]
     
     try:
-        response = llm.invoke(messages)
-        answer = response.content.strip()
+        # Eseguire la richiesta al modello
+        completion = client.chat_completion(
+            messages=messages,
+            max_tokens=500,
+            temperature=0.01
+        )
+        
+        # Estrarre e restituire la risposta
+        answer = completion["choices"][0]["message"]["content"].strip()
         return answer
     except Exception as e:
         raise ValueError(f"Errore durante l'elaborazione della domanda: {e}")
+
 
 
 def parse_meals_with_llm(lines,list_days,n_value = 5):
