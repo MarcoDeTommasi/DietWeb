@@ -7,13 +7,14 @@ import yaml
 from yaml.loader import SafeLoader
 import time
 
+#--client.showSidebarNavigation=False
 
 
 
 if __name__ == "__main__":
 
     # Set page centered
-    st.set_page_config(layout="wide",initial_sidebar_state="collapsed")
+    st.set_page_config(layout="wide")
     
     # Title
 

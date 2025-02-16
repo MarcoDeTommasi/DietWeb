@@ -7,17 +7,19 @@ import ast
 from utils import template
 import json
 import re
-from utils_dicts import list_of_days
-
+from utils_dicts import list_of_days,list_of_meals
+from utils_db import save_diet
+from sidebar import mostra_sidebar
 
 # Configurazione del client Hugging Face
 client = InferenceClient(
     model="mistralai/Mistral-7B-Instruct-v0.3",  # Modello specificato
-    #model="mistralai/Mistral-Small-24B-Instruct-2501",
+    #model="Groq/Llama-3-Groq-8B-Tool-Use",
     token=os.environ["HUGGINGFACE_API_TOKEN"],  # Sostituisci con il tuo token
     timeout=120  # Timeout per richieste lunghe
 )
-st.set_page_config(layout="wide",initial_sidebar_state="collapsed")
+st.set_page_config(layout="wide")
+mostra_sidebar()
 
 def process_llm_answer(context, max_retries=3):
     """
@@ -162,12 +164,12 @@ def parse_meals_with_llm(lines,list_days):
     chunks = chunk_text_by_day(lines)
     for day in list_days:
         answers[day]={}
-        for meal in ["Colazione", "Pranzo", "Cena", "SpuntinoMattina","SpuntinoPomeriggio"]:
+        for meal in list_of_meals:
             question = f"Cosa devo mangiare di {day} per {meal}?"
             custom_prompt = template.format(context=chunks[day], question=question)
             answer = process_llm_answer(custom_prompt)
             answers[day][meal]=answer
-            #print(f"{day}-{meal}: {answer}")
+            print(f"{day}-{meal}: {answer}")
       
 
     # Restituisci il dizionario con le risposte per il giorno specificato
@@ -229,15 +231,17 @@ def edit_meal_data():
                                        },
                                        num_rows="dynamic")
 
-            # Memorizziamo i dati modificati in un dizionario temporaneo
             meal_new_data = {}
-            for i, alimento in enumerate(edited_df["Alimento"]):
-                meal_new_data[alimento] = {
-                    "Quantità": edited_df.loc[i, "Quantità"],
-                    "Unità": edited_df.loc[i, "Unità"]
-                }
-            edited_data[meal] = meal_new_data  # Aggiungiamo i dati modificati per il pasto corrente
-
+            for index, row in edited_df.iterrows():
+                alimento = row["Alimento"]
+                quantita = row["Quantità"]
+                unita = row["Unità"]
+                
+                if pd.notna(alimento) and alimento.strip():  # Controlla che il nome dell'alimento non sia vuoto
+                    meal_new_data[alimento] = {
+                        "Quantità": quantita,
+                        "Unità": unita
+                    }
     col1, col2, col3 = st.columns([1, 4, 1])
     
     # Salvataggio delle modifiche nel dizionario solo quando l'utente preme uno dei bottoni
@@ -260,24 +264,28 @@ def edit_meal_data():
 
 
 def upload_diet_page():
-    st.title("📤 Carica la tua Dieta")
-    if st.button("⬅️ Indietro"):
-        st.switch_page("pages/1_home.py")
-    st.write("Trascina qui il file .pdf della tua dieta.")
+    col1,col2 = st.columns([9,1])
+    with col1:  
+        st.title("📤 Carica la tua Dieta")
+    with col2:
+        if st.button("⬅️ Indietro"):
+            st.switch_page("pages/1_home.py")
 
-    uploaded_file = st.file_uploader("Carica un file .pdf:", type=["pdf"], accept_multiple_files=False)
+    if 'dict_lunch' not in st.session_state.keys():
+        st.write("Trascina qui il file .pdf della tua dieta.")
+        uploaded_file = st.file_uploader("Carica un file .pdf:", type=["pdf"], accept_multiple_files=False)
     
-    if uploaded_file and "dict_lunch" not in st.session_state:
-       #st.success(f"✅ File '{uploaded_file.name}' caricato con successo!")
-        st.warning(f"🔄 Attendere l'elaborazione del documento '{uploaded_file.name}'..")
-        lines = parse_pdf_to_dict(uploaded_file)
-        dict_raw = parse_meals_with_llm(lines, list_of_days)
-        dict_lunch = clean_meal_data(dict_raw)
-        ## Salviamo il dizionario solo se non è già stato elaborato
-        st.session_state["dict_lunch"] = dict_lunch
-        st.session_state["review_complete"] = False
-        st.session_state["current_day"] = 0
-        st.rerun()
+        if uploaded_file and 'review_complete' not in st.session_state:
+        #st.success(f"✅ File '{uploaded_file.name}' caricato con successo!")
+            st.warning(f"🔄 Attendere l'elaborazione del documento '{uploaded_file.name}'..")
+            lines = parse_pdf_to_dict(uploaded_file)
+            dict_raw = parse_meals_with_llm(lines, list_of_days)
+            dict_lunch = clean_meal_data(dict_raw)
+            ## Salviamo il dizionario solo se non è già stato elaborato
+            st.session_state["dict_lunch"] = dict_lunch
+            st.session_state["review_complete"] = False
+            st.session_state["current_day"] = 0
+            st.rerun()
     
     if "review_complete" in st.session_state and st.session_state["review_complete"]:
         st.subheader("📋 Piano nutrizionale confermato")
@@ -314,11 +322,17 @@ def upload_diet_page():
 
         with col3:  # Sposta "Salva e Invia" tutto a destra
             if st.button("💾 Salva e Invia"):
-                st.success("✅ Dati salvati con successo!")
-                st.switch_page("pages/3_lista_spesa.py")
+                if save_diet(st.session_state['username'],st.session_state['dict_lunch']):
+                    st.success("✅ Dati salvati con successo!")
+                    st.switch_page("pages/3_lista_spesa.py")
     elif "review_complete" in st.session_state and st.session_state['review_complete'] == False:
-        st.success(f"✅ AI Review terminata per il '{uploaded_file.name}' Proseguire con la verifica.")
+        st.success(f"✅ AI Review terminata per il documento, Proseguire con la verifica.")
         edit_meal_data()
     
 if __name__ == "__main__":
-    upload_diet_page()
+    if 'username' not in st.session_state.keys() or st.session_state['username']==None:
+        st.error("❌ Errore nel caricamento della pagina, Username assente! ")
+    else:
+        upload_diet_page()
+
+
