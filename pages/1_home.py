@@ -42,7 +42,7 @@ def suggerisci_pasto(dict_lunch):
     return messaggio
 
 st.set_page_config(layout="wide")
-
+st.session_state['pagina_corrente']="home"
 # Homepage Streamlit
 st.title("🍽️ DietApp Web Version!")
 st.write("Benvenuta/o! Questa applicazione ti aiuterà a gestire la tua dieta e la tua lista della spesa.")
