@@ -46,7 +46,7 @@ st.set_page_config(layout="wide")
 # Homepage Streamlit
 st.title("🍽️ DietApp Web Version!")
 st.write("Benvenuta/o! Questa applicazione ti aiuterà a gestire la tua dieta e la tua lista della spesa.")
-mostra_sidebar()
+
 st.subheader("🔹 Inserisci il tuo username per accedere")
 username = st.text_input("Username (univoco):", key="input_username")
 
@@ -91,10 +91,10 @@ if username:
 
         # Recupera Nome e Cognome dalla sessione per non perderli al refresh
         if "nome" not in st.session_state:
-            st.session_state["nome"] = ""
+            st.session_state["nome"] = None
         if "cognome" not in st.session_state:
-            st.session_state["cognome"] = ""
-
+            st.session_state["cognome"] = None
+        mostra_sidebar()
         nome = st.text_input("Nome:", value=st.session_state["nome"], key="input_nome")
         cognome = st.text_input("Cognome:", value=st.session_state["cognome"], key="input_cognome")
 
