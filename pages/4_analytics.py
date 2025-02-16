@@ -11,7 +11,7 @@ mostra_sidebar()
 
 def analitics_eval():
     df_spesa = get_user_spesa(st.session_state["username"])
-    df_spesa['Data'] = pd.to_datetime(df_spesa['Data'])
+    df_spesa['Data'] = pd.to_datetime(df_spesa['Data'], errors='coerce', utc=True)
 
     flattened_data = []
     # Iteriamo attraverso ogni riga del DataFrame
