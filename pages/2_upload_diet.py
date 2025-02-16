@@ -243,12 +243,16 @@ def edit_meal_data():
                         "Quantità": quantita,
                         "Unità": unita
                     }
+            # Salva meal_new_data in edited_data
+            edited_data[meal] = meal_new_data
     col1, col2, col3 = st.columns([1, 4, 1])
     
     # Salvataggio delle modifiche nel dizionario solo quando l'utente preme uno dei bottoni
     with col1:
         if st.button("⬅️ Giorno Precedente", disabled=st.session_state['current_day'] == 0):
             # Non aggiornare il dizionario, solo cambiamo il giorno
+            dict_lunch[current_day] = edited_data  # Salviamo i dati modificati nel dizionario
+            st.session_state["dict_lunch"] = dict_lunch  # Aggiorniamo il dizionario globale
             st.session_state["current_day"] -= 1
             st.rerun()
     
@@ -325,7 +329,7 @@ def upload_diet_page():
             if st.button("💾 Salva e Invia"):
                 if save_diet(st.session_state['username'],st.session_state['dict_lunch']):
                     st.success("✅ Dati salvati con successo!")
-                    st.switch_page("pages/3_lista_spesa.py")
+                    st.switch_page("pages/1_home.py")
     elif "review_complete" in st.session_state and st.session_state['review_complete'] == False:
         st.success(f"✅ AI Review terminata per il documento, Proseguire con la verifica.")
         edit_meal_data()

@@ -48,7 +48,10 @@ st.title("🍽️ DietApp Web Version!")
 st.write("Benvenuta/o! Questa applicazione ti aiuterà a gestire la tua dieta e la tua lista della spesa.")
 
 st.subheader("🔹 Inserisci il tuo username per accedere")
-username = st.text_input("Username (univoco):", key="input_username")
+if st.session_state['username'] !=None:
+    username = st.session_state['username']
+else:
+    username = st.text_input("Username (univoco):", key="input_username")
 
 if username:
     nome_db, cognome_db, dieta = get_user(username)
@@ -59,7 +62,7 @@ if username:
         st.session_state['nome'] = nome_db
         st.session_state['cognome'] = cognome_db
         st.session_state['dict_lunch'] = dieta
-
+        mostra_sidebar()
         st.success(f"🎉 Bentornato {nome_db} {cognome_db}!")
         col1,col2 = st.columns(2)
         with col1:
