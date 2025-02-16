@@ -19,6 +19,7 @@ client = InferenceClient(
     timeout=120  # Timeout per richieste lunghe
 )
 st.set_page_config(layout="wide")
+st.session_state['pagina_corrente']="upload_diet"
 mostra_sidebar()
 
 def process_llm_answer(context, max_retries=3):

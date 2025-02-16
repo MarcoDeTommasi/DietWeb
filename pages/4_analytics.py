@@ -6,6 +6,7 @@ from utils import get_food_emoji
 from sidebar import mostra_sidebar
 
 st.set_page_config(layout="wide")
+st.session_state['pagina_corrente']="analytics"
 mostra_sidebar()
 
 def analitics_eval():

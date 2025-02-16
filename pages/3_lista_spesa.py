@@ -9,6 +9,7 @@ from utils_dicts import list_of_days,list_of_meals
 from sidebar import mostra_sidebar
 
 st.set_page_config(layout="wide")
+st.session_state['pagina_corrente']="lista_spesa"
 mostra_sidebar()
 
 # Funzione che converte dict_lunch in dict_giorni
