@@ -15,7 +15,7 @@ from sidebar import mostra_sidebar
 client = InferenceClient(
     model="mistralai/Mistral-7B-Instruct-v0.3",  # Modello specificato
     #model="Groq/Llama-3-Groq-8B-Tool-Use",
-    token=os.environ["HUGGINGFACE_API_TOKEN"],  # Sostituisci con il tuo token
+    token = os.getenv("HUGGINGFACE_API_TOKEN"),  # Sostituisci con il tuo token
     timeout=120  # Timeout per richieste lunghe
 )
 st.set_page_config(layout="wide")
