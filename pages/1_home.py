@@ -48,10 +48,8 @@ st.title("🍽️ DietApp Web Version!")
 st.write("Benvenuta/o! Questa applicazione ti aiuterà a gestire la tua dieta e la tua lista della spesa.")
 
 st.subheader("🔹 Inserisci il tuo username per accedere")
-if st.session_state['username'] !=None:
-    username = st.session_state['username']
-else:
-    username = st.text_input("Username (univoco):", key="input_username")
+
+username = st.text_input("Username (univoco):", key="input_username")
 
 if username:
     nome_db, cognome_db, dieta = get_user(username)
@@ -62,6 +60,7 @@ if username:
         st.session_state['nome'] = nome_db
         st.session_state['cognome'] = cognome_db
         st.session_state['dict_lunch'] = dieta
+        print(dieta)
         mostra_sidebar()
         st.success(f"🎉 Bentornato {nome_db} {cognome_db}!")
         col1,col2 = st.columns(2)
@@ -93,10 +92,8 @@ if username:
         st.warning("⚠️ Username non trovato! Inserisci Nome e Cognome per registrarti.")
 
         # Recupera Nome e Cognome dalla sessione per non perderli al refresh
-        if "nome" not in st.session_state:
-            st.session_state["nome"] = None
-        if "cognome" not in st.session_state:
-            st.session_state["cognome"] = None
+        st.session_state["nome"] = None
+        st.session_state["cognome"] = None
         mostra_sidebar()
         nome = st.text_input("Nome:", value=st.session_state["nome"], key="input_nome")
         cognome = st.text_input("Cognome:", value=st.session_state["cognome"], key="input_cognome")
@@ -104,6 +101,7 @@ if username:
         # Aggiorna i valori in sessione mentre vengono digitati
         if nome and cognome and username:
             if st.button("📤 Registra e Carica il tuo Piano Nutrizionale"):
+                st.session_state.clear()
                 register_user(nome, cognome, username)
                 st.switch_page("pages/2_upload_diet.py")
         else:

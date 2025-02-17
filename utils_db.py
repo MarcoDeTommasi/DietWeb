@@ -45,7 +45,7 @@ def save_diet(username, dieta):
         
         if user:
             # Se l'utente esiste, aggiorna la dieta
-            c.execute("UPDATE utenti SET dieta = ? WHERE username = ?", (dieta, username))
+            c.execute("UPDATE utenti SET dieta = ? WHERE username = ?", (json.dumps(dieta), username))
         else:
             st.error("⚠️ Errore: impossibile salvare la dieta per l'username {username}")
             return False

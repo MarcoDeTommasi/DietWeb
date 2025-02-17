@@ -69,6 +69,15 @@ def process_llm_answer(context, max_retries=3):
     
     return {}
     
+
+def convert_quantities_to_int(d):
+    for key, value in d.items():
+        if isinstance(value, dict):
+            convert_quantities_to_int(value)  # Ricorsione per scendere nei sotto-dizionari
+        elif key == "Quantità" and isinstance(value, float) and value.is_integer():
+            d[key] = int(value)  # Conversione a intero solo se non ci sono decimali
+    return d
+
 def chunk_text_by_day(lines):
     """
     Segmenta il testo in base ai giorni della settimana.
@@ -296,14 +305,21 @@ def upload_diet_page():
         st.subheader("📋 Piano nutrizionale confermato")
 
         # Mappatura delle emoji per ogni pasto
-        meal_emojis = {
+        base_meal_emojis = {
             "Colazione": "🥐",
             "Pranzo": "🍝",
             "Cena": "🥩",
             "SpuntinoMattina": "🍎",
             "SpuntinoPomeriggio": "🍪"
         }
+        meal_emojis={}
 
+        for day in list_of_days:
+            for meal in base_meal_emojis:
+                if meal in st.session_state['dict_lunch'][day]:
+                    meal_emojis[meal] = base_meal_emojis[meal]
+                else:
+                    meal_emojis[meal] = ""
         # Creazione della lista strutturata per il DataFrame
         data = []
         for day, meals in st.session_state["dict_lunch"].items():
@@ -327,8 +343,11 @@ def upload_diet_page():
 
         with col3:  # Sposta "Salva e Invia" tutto a destra
             if st.button("💾 Salva e Invia"):
-                if save_diet(st.session_state['username'],st.session_state['dict_lunch']):
+                
+                dict_lunch = convert_quantities_to_int(st.session_state['dict_lunch'])
+                if save_diet(st.session_state['username'],dict_lunch):
                     st.success("✅ Dati salvati con successo!")
+                    st.session_state.clear()
                     st.switch_page("pages/1_home.py")
     elif "review_complete" in st.session_state and st.session_state['review_complete'] == False:
         st.success(f"✅ AI Review terminata per il documento, Proseguire con la verifica.")
