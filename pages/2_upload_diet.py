@@ -247,10 +247,12 @@ def edit_meal_data():
                 quantita = row["Quantità"]
                 unita = row["Unità"]
                 
+
+
                 if pd.notna(alimento) and alimento.strip():  # Controlla che il nome dell'alimento non sia vuoto
                     meal_new_data[alimento] = {
-                        "Quantità": quantita,
-                        "Unità": unita
+                        "Quantità": quantita if quantita is not None else 0,
+                        "Unità": unita if unita is not None else "g",
                     }
             # Salva meal_new_data in edited_data
             edited_data[meal] = meal_new_data
@@ -345,6 +347,7 @@ def upload_diet_page():
             if st.button("💾 Salva e Invia"):
                 
                 dict_lunch = convert_quantities_to_int(st.session_state['dict_lunch'])
+
                 if save_diet(st.session_state['username'],dict_lunch):
                     st.success("✅ Dati salvati con successo!")
                     for key in st.session_state.keys():
