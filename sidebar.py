@@ -14,6 +14,9 @@ def mostra_sidebar():
         st.write(f"Pagina corrente: {st.session_state.pagina_corrente}")
 
         if st.button("Logout 🚪"):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.switch_page('pages/1_home.py')
+            if "authentication_status" in st.session_state.keys() and st.session_state["authentication_status"]:
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                st.switch_page('pages/1_home.py')
+            else:
+                st.switch_page('0_login.py')

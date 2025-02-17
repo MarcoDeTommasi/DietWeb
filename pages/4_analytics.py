@@ -142,7 +142,11 @@ def analitics_eval():
     st.plotly_chart(fig_classifica_frequenza, use_container_width=True)
 
 if __name__ == "__main__":
-    if 'username' in st.session_state.keys() and 'dict_lunch' in st.session_state.keys():
-        analitics_eval()
+    if "authentication_status" in st.session_state.keys() and st.session_state["authentication_status"]:
+        
+        if 'username' in st.session_state.keys() and 'dict_lunch' in st.session_state.keys():
+            analitics_eval()
+        else:
+            st.error("❌ Errore nel caricamento della pagina! Username Invalido!")
     else:
-        st.error("❌ Errore nel caricamento della pagina! Username Invalido!")
+            st.error("❌ Not Authenticated! ")

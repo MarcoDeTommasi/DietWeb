@@ -194,9 +194,12 @@ def main():
     st.divider()
 
 if __name__ == "__main__":
-    if 'dict_lunch' in st.session_state.keys():
-        dict_lunch = st.session_state['dict_lunch']
-        main()
+    if "authentication_status" in st.session_state.keys() and st.session_state["authentication_status"]:
+        if 'dict_lunch' in st.session_state.keys():
+            dict_lunch = st.session_state['dict_lunch']
+            main()
+        else:
+            st.error("❌ Errore nel caricamento della dieta, impossibile accede al generatore! ")
     else:
-        st.error("❌ Errore nel caricamento della dieta, impossibile accede al generatore! ")
+        st.error("❌ Not Authenticated! ")
 

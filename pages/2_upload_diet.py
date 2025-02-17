@@ -354,9 +354,12 @@ def upload_diet_page():
         edit_meal_data()
     
 if __name__ == "__main__":
-    if 'username' not in st.session_state.keys() or st.session_state['username']==None:
-        st.error("❌ Errore nel caricamento della pagina, Username assente! ")
+    if "authentication_status" in st.session_state.keys() and st.session_state["authentication_status"]:
+        if 'username' not in st.session_state.keys() or st.session_state['username']==None:
+            st.error("❌ Errore nel caricamento della pagina, Username assente! ")
+        else:
+            upload_diet_page()
     else:
-        upload_diet_page()
+        st.error("❌ Not Authenticated! ")
 
 
