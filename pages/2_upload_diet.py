@@ -185,6 +185,16 @@ def parse_meals_with_llm(lines,list_days):
     # Restituisci il dizionario con le risposte per il giorno specificato
     return answers
 
+def clean_dict_values(d):
+    for day, meals in d.items():
+        for meal, foods in meals.items():
+            for alimento, details in foods.items():
+                if details["Quantità"] is None or pd.isna(details["Quantità"]):
+                    details["Quantità"] = 0
+                if details["Unità"] is None or pd.isna(details["Unità"]):
+                    details["Unità"] = "g"
+    return d
+
 def parse_pdf_to_dict(pdf_file):
     """
     Estrai il contenuto di un file PDF e crealo in un dizionario strutturato per il piano alimentare.
@@ -246,14 +256,14 @@ def edit_meal_data():
                 alimento = row["Alimento"]
                 quantita = row["Quantità"]
                 unita = row["Unità"]
-                
-
 
                 if pd.notna(alimento) and alimento.strip():  # Controlla che il nome dell'alimento non sia vuoto
                     meal_new_data[alimento] = {
-                        "Quantità": quantita if quantita is not None else 0,
-                        "Unità": unita if unita is not None else "g",
+                        "Quantità": 0 if pd.isna(quantita) else quantita,  # Se è NaN, metti 0
+                        "Unità": "g" if pd.isna(unita) or not unita else unita,  # Se è NaN o vuoto, metti "g"
                     }
+
+                
             # Salva meal_new_data in edited_data
             edited_data[meal] = meal_new_data
     col1, col2, col3 = st.columns([1, 4, 1])
@@ -263,7 +273,7 @@ def edit_meal_data():
         if st.button("⬅️ Giorno Precedente", disabled=st.session_state['current_day'] == 0):
             # Non aggiornare il dizionario, solo cambiamo il giorno
             dict_lunch[current_day] = edited_data  # Salviamo i dati modificati nel dizionario
-            st.session_state["dict_lunch"] = dict_lunch  # Aggiorniamo il dizionario globale
+            st.session_state["dict_lunch"] = clean_dict_values(dict_lunch)  # Aggiorniamo il dizionario globale
             st.session_state["current_day"] -= 1
             st.rerun()
     
@@ -271,7 +281,7 @@ def edit_meal_data():
         if st.button("✅ Conferma e Avanti"):
             # Aggiorniamo il dizionario con i dati modificati solo quando l'utente conferma
             dict_lunch[current_day] = edited_data  # Salviamo i dati modificati nel dizionario
-            st.session_state["dict_lunch"] = dict_lunch  # Aggiorniamo il dizionario globale
+            st.session_state["dict_lunch"] = clean_dict_values(dict_lunch)  # Aggiorniamo il dizionario globale
             if st.session_state["current_day"] < len(days) - 1:
                 st.session_state["current_day"] += 1
             else:
