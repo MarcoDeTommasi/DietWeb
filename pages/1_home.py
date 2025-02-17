@@ -60,7 +60,6 @@ def home():
             st.session_state['nome'] = nome_db
             st.session_state['cognome'] = cognome_db
             st.session_state['dict_lunch'] = dieta
-            print(dieta)
             mostra_sidebar()
             st.success(f"🎉 Bentornato {nome_db} {cognome_db}!")
             col1,col2 = st.columns(2)
@@ -101,7 +100,9 @@ def home():
             # Aggiorna i valori in sessione mentre vengono digitati
             if nome and cognome and username:
                 if st.button("📤 Registra e Carica il tuo Piano Nutrizionale"):
-                    st.session_state.clear()
+                    for key in st.session_state.keys():
+                        if key != "authentication_status":
+                            del st.session_state[key]
                     register_user(nome, cognome, username)
                     st.switch_page("pages/2_upload_diet.py")
             else:
