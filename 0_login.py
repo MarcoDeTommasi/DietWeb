@@ -40,6 +40,7 @@ if __name__ == "__main__":
     if st.session_state["authentication_status"]:
         st.title('Logged In')
         st.toast("Taking you to the application...")
+        st.session_state['username']=None
         time.sleep(1)
         st.switch_page("pages/1_home.py")
         
