@@ -8,7 +8,7 @@ def mostra_sidebar():
         st.session_state.pagina_corrente = 'home'
 
     with st.sidebar:
-        if st.session_state.nome is not None and st.session_state.cognome:
+        if st.session_state.nome is not None and st.session_state.cognome is not None:
             st.write(f"### Ciao, {st.session_state.nome} {st.session_state.cognome}! ")
         st.write(f"Username: {st.session_state.username}")
         st.write(f"Pagina corrente: {st.session_state.pagina_corrente}")
