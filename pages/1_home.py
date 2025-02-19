@@ -7,39 +7,48 @@ from utils_db import get_user,register_user,get_user_spesa
 import json
 from sidebar import mostra_sidebar
 
-def suggerisci_pasto(dict_lunch):
+import streamlit as st
+from datetime import datetime
+
+giorni_map = {
+    "Monday": "Lunedì", "Tuesday": "Martedì", "Wednesday": "Mercoledì", "Thursday": "Giovedì",
+    "Friday": "Venerdì", "Saturday": "Sabato", "Sunday": "Domenica"
+}
+
+def determina_pasto_corrente():
     ora_corrente = datetime.now().hour
-    giorno_corrente = datetime.now().strftime("%A")  # Ottiene il giorno in inglese
-    giorno_italiano = giorni_map[giorno_corrente]
-
-    # Determina il tipo di pasto in base all'ora
-    if ora_corrente < 10:
-        pasto_corrente = "Colazione"
-    elif 10 <= ora_corrente < 12:
-        pasto_corrente = "SpuntinoMattina"
-    elif 12 <= ora_corrente < 15:
-        pasto_corrente = "Pranzo"
-    elif 15 <= ora_corrente < 18:
-        pasto_corrente = "SpuntinoPomeriggio"
+    if ora_corrente < 11:
+        return "Colazione"
+    elif 11 <= ora_corrente < 16:
+        return "Pranzo"
     else:
-        pasto_corrente = "Cena"
+        return "Cena"
 
-    # Trova i suggerimenti per il giorno corrente e il pasto
-    pasti_del_giorno = dict_lunch.get(giorno_italiano, {})
-    cibi_suggeriti = pasti_del_giorno.get(pasto_corrente, {})
+def suggerisci_pasti(dict_lunch, giorno, pasti_selezionati, include_spuntini=False):
+    pasti_del_giorno = dict_lunch.get(giorno, {})
+    pasti_principali = ""
+    spuntini = ""
+    
+    for pasto, cibi in pasti_del_giorno.items():
+        if pasto in ["Colazione", "Pranzo", "Cena"] and pasto in pasti_selezionati:
+            pasti_principali += f"### {pasto.replace('_', ' ').capitalize()}\n"
+            for alimento, info in cibi.items():
+                emoji = get_food_emoji(alimento)
+                quantity = info['Quantità']
+                unit = info['Unità']
+                pasti_principali += f"- {emoji} {alimento.replace('_', ' ')}: {quantity} {unit}\n"
+            pasti_principali += "\n"
+        elif "Spuntino" in pasto:
+            spuntini += f"###  Spuntino {pasto.replace('Spuntino', '').capitalize()}\n"
+            for alimento, info in cibi.items():
+                emoji = get_food_emoji(alimento)
+                quantity = info['Quantità']
+                unit = info['Unità']
+                spuntini += f"- {emoji} {alimento.replace('_', ' ')}: {quantity} {unit}\n"
+            spuntini += "\n"
+    
+    return pasti_principali, spuntini
 
-    # Costruisci il messaggio con emoji
-    if cibi_suggeriti:
-        messaggio = f"Prossimo pasto {pasto_corrente.replace('_', ' ').capitalize()}:\n"
-        for alimento, info in cibi_suggeriti.items():
-            emoji = get_food_emoji(alimento)
-            quantity = info['Quantità']
-            unit = info['Unità']
-            messaggio += f"- {emoji} {alimento.replace('_', ' ')} : {quantity} {unit}\n"
-    else:
-        messaggio = "Non ci sono suggerimenti disponibili per il tuo pasto attuale."
-
-    return messaggio
 def home():
     st.set_page_config(layout="wide")
     st.session_state['pagina_corrente']="home"
@@ -84,8 +93,22 @@ def home():
                     st.switch_page('pages/2_upload_diet.py')
             with col2:
                 st.write("## 🍽️ Suggerimento per il prossimo pasto")
-                st.write(f"### {suggerisci_pasto(dieta)}")
+                giorno_corrente = giorni_map[datetime.now().strftime("%A")]
+                giorno_selezionato = st.selectbox("Seleziona un giorno:", list(giorni_map.values()), index=list(giorni_map.values()).index(giorno_corrente))
 
+                pasto_corrente = determina_pasto_corrente()
+                pasti_disponibili = ["Colazione", "Pranzo", "Cena"]
+                pasti_selezionati = st.multiselect("Seleziona i pasti da visualizzare:", pasti_disponibili, default=[pasto_corrente])
+                
+                col1, col2 = st.columns(2)
+                pasti_principali, spuntini = suggerisci_pasti(dieta, giorno_selezionato, pasti_selezionati, include_spuntini=True)
+                
+                with col1:
+                    st.write("## 🍽️ Pasti Principali")
+                    st.write(pasti_principali)
+                with col2:
+                    st.write("## 🥪 Spuntini")
+                    st.write(spuntini)
         else:
             # Username non trovato → Chiede Nome e Cognome
             st.warning("⚠️ Username non trovato! Inserisci Nome e Cognome per registrarti.")
