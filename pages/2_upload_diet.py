@@ -78,7 +78,8 @@ def convert_quantities_to_int(d):
             d[key] = int(value)  # Conversione a intero solo se non ci sono decimali
     return d
 
-def check_invalid_quantities(d):
+
+def check_invalid_quantities(d,error_container):
     """
     Controlla se ci sono valori None nelle chiavi o quantità pari a 0/None.
     Se trova errori, mostra un messaggio di errore e un DataFrame con i problemi.
@@ -91,15 +92,17 @@ def check_invalid_quantities(d):
                 if alimento is None or details["Quantità"] in [None, 0]:  
                     invalid_entries.append([day, meal, alimento, details["Quantità"], details["Unità"]])
 
-    if invalid_entries:
-        st.error("❌ Errore! Alcuni alimenti hanno quantità non valide (0 o None). Correggi prima di procedere.")
+    with error_container:  # Scrive nel container per restare visibile
+        st.empty()  # Reset dello spazio
+        if invalid_entries:
+            st.error("❌ Errore! Alcuni alimenti hanno quantità non valide (0 o None). Correggi prima di procedere.")
+            
+            # Creazione della tabella solo con le righe problematiche
+            df = pd.DataFrame(invalid_entries, columns=["📅 Giorno", "🍽 Pasto", "🥗 Alimento", "⚖️ Quantità", "📏 Unità"])
+            st.data_editor(df, use_container_width=True, hide_index=True)
+            
+            return False  # Indica che ci sono errori
         
-        # Creazione della tabella solo con le righe problematiche
-        df = pd.DataFrame(invalid_entries, columns=["📅 Giorno", "🍽 Pasto", "🥗 Alimento", "⚖️ Quantità", "📏 Unità"])
-        st.data_editor(df, use_container_width=True, hide_index=True)
-        
-        return False  # Indica che ci sono errori
-    
     return True  # Indica che è tutto ok
 
 
@@ -321,7 +324,8 @@ def upload_diet_page():
     with col2:
         if st.button("⬅️ Indietro"):
             st.switch_page("pages/1_home.py")
-
+    # Placeholder per visualizzare errori in alto
+    error_container = st.container()
     if 'dict_lunch' not in st.session_state.keys():
         st.write("Trascina qui il file .pdf della tua dieta.")
         uploaded_file = st.file_uploader("Carica un file .pdf:", type=["pdf"], accept_multiple_files=False)
@@ -379,8 +383,11 @@ def upload_diet_page():
                 st.rerun()
 
         with col3:  # Sposta "Salva e Invia" tutto a destra
+            # Controllo errori prima che l'utente prema il bottone
+            is_valid = check_invalid_quantities(st.session_state['dict_lunch'],error_container)
+
             if st.button("💾 Salva e Invia"):
-                if check_invalid_quantities(st.session_state['dict_lunch']):  # Controllo prima del salvataggio
+                if is_valid:  # Se tutto è OK, procede con il salvataggio
                     dict_lunch = convert_quantities_to_int(st.session_state['dict_lunch'])  
                     
                     if save_diet(st.session_state['username'], dict_lunch):
