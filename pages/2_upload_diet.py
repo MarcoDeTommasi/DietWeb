@@ -78,6 +78,31 @@ def convert_quantities_to_int(d):
             d[key] = int(value)  # Conversione a intero solo se non ci sono decimali
     return d
 
+def check_invalid_quantities(d):
+    """
+    Controlla se ci sono valori None nelle chiavi o quantità pari a 0/None.
+    Se trova errori, mostra un messaggio di errore e un DataFrame con i problemi.
+    """
+    invalid_entries = []
+
+    for day, meals in d.items():
+        for meal, foods in meals.items():
+            for alimento, details in foods.items():
+                if alimento is None or details["Quantità"] in [None, 0]:  
+                    invalid_entries.append([day, meal, alimento, details["Quantità"], details["Unità"]])
+
+    if invalid_entries:
+        st.error("❌ Errore! Alcuni alimenti hanno quantità non valide (0 o None). Correggi prima di procedere.")
+        
+        # Creazione della tabella solo con le righe problematiche
+        df = pd.DataFrame(invalid_entries, columns=["📅 Giorno", "🍽 Pasto", "🥗 Alimento", "⚖️ Quantità", "📏 Unità"])
+        st.data_editor(df, use_container_width=True, hide_index=True)
+        
+        return False  # Indica che ci sono errori
+    
+    return True  # Indica che è tutto ok
+
+
 def chunk_text_by_day(lines):
     """
     Segmenta il testo in base ai giorni della settimana.
@@ -355,12 +380,12 @@ def upload_diet_page():
 
         with col3:  # Sposta "Salva e Invia" tutto a destra
             if st.button("💾 Salva e Invia"):
-                
-                dict_lunch = convert_quantities_to_int(st.session_state['dict_lunch'])
-
-                if save_diet(st.session_state['username'],dict_lunch):
-                    st.success("✅ Dati salvati con successo!")
-                    st.switch_page("pages/1_home.py")
+                if check_invalid_quantities(st.session_state['dict_lunch']):  # Controllo prima del salvataggio
+                    dict_lunch = convert_quantities_to_int(st.session_state['dict_lunch'])  
+                    
+                    if save_diet(st.session_state['username'], dict_lunch):
+                        st.success("✅ Dati salvati con successo!")
+                        st.switch_page("pages/1_home.py")
 
     elif "review_complete" in st.session_state and st.session_state['review_complete'] == False:
         st.success(f"✅ AI Review terminata per il documento, Proseguire con la verifica.")
