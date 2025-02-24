@@ -360,10 +360,8 @@ def upload_diet_page():
 
                 if save_diet(st.session_state['username'],dict_lunch):
                     st.success("✅ Dati salvati con successo!")
-                    for key in st.session_state.keys():
-                        if key != "authentication_status":
-                            del st.session_state[key]
                     st.switch_page("pages/1_home.py")
+
     elif "review_complete" in st.session_state and st.session_state['review_complete'] == False:
         st.success(f"✅ AI Review terminata per il documento, Proseguire con la verifica.")
         edit_meal_data()
