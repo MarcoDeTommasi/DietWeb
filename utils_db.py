@@ -116,7 +116,7 @@ def register_user(username, first_name, last_name, email, password):
     
     username = username.lower()  # 🔹 Converte in lowercase
 
-    hashed_password = stauth.Hasher([password]).generate()[0]
+    hashed_password = stauth.Hasher([password]).hash(password=password)
 
     try:
         cursor.execute("INSERT INTO users (username, first_name, last_name, email, password) VALUES (?, ?, ?, ?, ?)", 
