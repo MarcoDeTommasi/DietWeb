@@ -2,6 +2,7 @@ import sqlite3
 import streamlit as st
 import json
 import pandas as pd
+import streamlit_authenticator as stauth
 
 # Funzione per verificare se un utente esiste nel database
 def get_user(username):
@@ -109,6 +110,41 @@ def get_user_spesa(username):
     finally:
         conn.close()
 
+def register_user(username, first_name, last_name, email, password):
+    conn = sqlite3.connect("dieta.db")
+    cursor = conn.cursor()
+    
+    username = username.lower()  # 🔹 Converte in lowercase
+
+    hashed_password = stauth.Hasher([password]).generate()[0]
+
+    try:
+        cursor.execute("INSERT INTO users (username, first_name, last_name, email, password) VALUES (?, ?, ?, ?, ?)", 
+                       (username, first_name, last_name, email, hashed_password))
+        conn.commit()
+        st.success("✅ Registrazione completata! Ora puoi effettuare il login.")
+    except sqlite3.IntegrityError:
+        st.error("⚠️ Username già esistente!")
+    finally:
+        conn.close()
+
+def get_users():
+    conn = sqlite3.connect("dieta.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT username, first_name, last_name, email, password FROM users")
+    users = cursor.fetchall()
+    conn.close()
+    
+    credentials = {"usernames": {}}
+    for user in users:
+        username, first_name, last_name, email, password = user
+        credentials["usernames"][username] = {
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": email,
+            "password": password  # La password è già hashata
+        }
+    return credentials
 # Esempio di utilizzo
 # df_diete = get_user_diets("test_user")
 # print(df_diete)

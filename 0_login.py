@@ -8,12 +8,15 @@ if __name__ == "__main__":
     # Recupera utenti dal database
     config = {"credentials": get_users()}  
 
+    # Converte tutti gli username salvati in lowercase per sicurezza
+    config["credentials"]["usernames"] = {k.lower(): v for k, v in config["credentials"]["usernames"].items()}
+
     # Configura l'autenticazione
     authenticator = stauth.Authenticate(
         config['credentials'],
-        "streamlit_auth",  # Nome del cookie
-        "random_signature_key",  # Chiave del cookie
-        30  # Durata del cookie in giorni
+        "streamlit_auth",
+        "random_signature_key",
+        30
     )
 
     # Effettua il login
@@ -21,6 +24,9 @@ if __name__ == "__main__":
         authenticator.login()
     except Exception as e:
         st.error(e)
+
+    if st.session_state.get("username"):
+        st.session_state["username"] = st.session_state["username"].lower() 
 
     if st.session_state["authentication_status"]:
         st.title(f'Benvenuto, {config["credentials"]["usernames"][st.session_state["username"]]["first_name"]}!')
