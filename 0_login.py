@@ -1,30 +1,19 @@
-import os
 import streamlit as st
 import streamlit_authenticator as stauth
-import yaml
-from yaml.loader import SafeLoader
-import time
-import hashlib
-
-CONFIG_PATH = './config/authentication.yaml'
-
-def save_config(config):
-    """Salva il file YAML aggiornato."""
-    with open(CONFIG_PATH, 'w') as file:
-        yaml.dump(config, file,default_flow_style=False, sort_keys=False)
+from utils_db import get_users,register_user
 
 if __name__ == "__main__":
     st.set_page_config(layout="wide")
 
-    # Carica il file di configurazione
-    with open(CONFIG_PATH) as file:
-        config = yaml.load(file, Loader=SafeLoader)
+    # Recupera utenti dal database
+    config = {"credentials": get_users()}  
 
+    # Configura l'autenticazione
     authenticator = stauth.Authenticate(
         config['credentials'],
-         config['cookie']['name'],
-         config['cookie']['key'],
-         config['cookie']['expiry_days']
+        "streamlit_auth",  # Nome del cookie
+        "random_signature_key",  # Chiave del cookie
+        30  # Durata del cookie in giorni
     )
 
     # Effettua il login
@@ -34,11 +23,11 @@ if __name__ == "__main__":
         st.error(e)
 
     if st.session_state["authentication_status"]:
-        st.title('Benvenuto!')
+        st.title(f'Benvenuto, {config["credentials"]["usernames"][st.session_state["username"]]["first_name"]}!')
         st.toast("Reindirizzamento alla dashboard...")
-        print(st.session_state['username'])
-        st.session_state['nome'] = config["credentials"]["usernames"][st.session_state['username']]['first_name']
-        st.session_state['cognome'] = config["credentials"]["usernames"][st.session_state['username']]['last_name']
+
+        st.session_state['nome'] = config["credentials"]["usernames"][st.session_state["username"]]['first_name']
+        st.session_state['cognome'] = config["credentials"]["usernames"][st.session_state["username"]]['last_name']
         st.session_state['authenticator'] = authenticator
         st.switch_page("pages/1_home.py")
 
@@ -47,8 +36,7 @@ if __name__ == "__main__":
     elif st.session_state["authentication_status"] is None:
         st.warning('⚠️ Inserisci username e password.')
 
-
-    
+    # Form di registrazione
     if "show_register_form" not in st.session_state:
         st.session_state["show_register_form"] = False
 
@@ -68,21 +56,7 @@ if __name__ == "__main__":
         if submit_button:
             if new_password != confirm_password:
                 st.error("❌ Le password non corrispondono!")
-            elif new_username in config["credentials"]["usernames"]:
-                st.error("⚠️ Username già esistente!")
             else:
-                hashed_password = stauth.Hasher(new_password).hash(password=new_password)
-                config["credentials"]["usernames"][new_username] = {
-                    "email": new_email,
-                    "failed_login_attempts": 0,
-                    "first_name": new_name,
-                    "last_name": new_surname,
-                    "logged_in": False,
-                    "password": hashed_password
-                }
-                save_config(config)
-                st.success("✅ Registrazione completata! Ora puoi effettuare il login.")
+                register_user(new_username, new_name, new_surname, new_email, new_password)
                 st.session_state["show_register_form"] = False  # Nasconde il form dopo la registrazione
                 st.rerun()
-
-
