@@ -145,7 +145,10 @@ if __name__ == "__main__":
     if "authentication_status" in st.session_state.keys() and st.session_state["authentication_status"]:
         
         if 'username' in st.session_state.keys() and 'dict_lunch' in st.session_state.keys():
-            analitics_eval()
+            if len(get_user_spesa(st.session_state['username']))>1:
+                analitics_eval()
+            else: 
+                st.error("❌ Errore nel caricamento della pagina! Dati Insufficienti!")
         else:
             st.error("❌ Errore nel caricamento della pagina! Username Invalido!")
     else:
