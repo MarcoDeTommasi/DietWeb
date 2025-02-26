@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime
 from utils_dicts import giorni_map
 from utils import get_food_emoji
-from utils_db import get_user,register_user,get_user_spesa,update_password
+from utils_db import get_user,register_user,get_user_spesa,update_password,register_diet
 import json
 import streamlit_authenticator as stauth
 from yaml.loader import SafeLoader
@@ -150,6 +150,7 @@ def home():
         # Aggiorna i valori in sessione mentre vengono digitati
         if nome and cognome and username:
             if st.button("📤 Registra e Carica il tuo Piano Nutrizionale"):
+                register_diet(nome, cognome, username)
                 st.switch_page("pages/2_upload_diet.py")
         else:
             st.info("➡️ Inserisci Nome e Cognome per continuare.")

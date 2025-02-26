@@ -395,7 +395,9 @@ def upload_diet_page():
                     
                     if save_diet(st.session_state['username'], dict_lunch):
                         st.success("✅ Dati salvati con successo!")
-                        #st.switch_page("pages/1_home.py")
+                        st.switch_page("pages/1_home.py")
+                    else:
+                        st.error("❌ Errore di Salvataggio! ")
 
     elif "review_complete" in st.session_state and st.session_state['review_complete'] == False:
         st.success(f"✅ AI Review terminata per il documento, Proseguire con la verifica.")
