@@ -7,7 +7,7 @@ if __name__ == "__main__":
 
     # Recupera utenti dal database
     config = {"credentials": get_users()}  
-
+    print(config)
     # Converte tutti gli username salvati in lowercase per sicurezza
     config["credentials"]["usernames"] = {k.lower(): v for k, v in config["credentials"]["usernames"].items()}
 
