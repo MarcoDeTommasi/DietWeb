@@ -60,6 +60,7 @@ def home():
     cognome = st.session_state['cognome']
     st.session_state['pagina_corrente']="home"
     nome_db, cognome_db, dieta = get_user(username)
+    print(dieta)
     # Recupera Nome e Cognome dalla sessione per non perderli al refresh
     mostra_sidebar()
 
