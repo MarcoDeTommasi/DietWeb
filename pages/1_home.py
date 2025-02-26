@@ -150,7 +150,6 @@ def home():
         # Aggiorna i valori in sessione mentre vengono digitati
         if nome and cognome and username:
             if st.button("📤 Registra e Carica il tuo Piano Nutrizionale"):
-                register_user(nome, cognome, username)
                 st.switch_page("pages/2_upload_diet.py")
         else:
             st.info("➡️ Inserisci Nome e Cognome per continuare.")
