@@ -28,14 +28,22 @@ if __name__ == "__main__":
     if st.session_state.get("username"):
         st.session_state["username"] = st.session_state["username"].lower() 
 
-    if st.session_state["authentication_status"]:
-        st.title(f'Benvenuto, {config["credentials"]["usernames"][st.session_state["username"]]["first_name"]}!')
-        st.toast("Reindirizzamento alla dashboard...")
+    if st.session_state.get("authentication_status"):
+        username = st.session_state.get("username", "").lower()  # Usa .get() per evitare KeyError
+        user_data = config["credentials"]["usernames"].get(username)
 
-        st.session_state['nome'] = config["credentials"]["usernames"][st.session_state["username"]]['first_name']
-        st.session_state['cognome'] = config["credentials"]["usernames"][st.session_state["username"]]['last_name']
-        st.session_state['authenticator'] = authenticator
-        st.switch_page("pages/1_home.py")
+        if user_data:
+            st.title(f'Benvenuto, {user_data["first_name"]}!')
+            st.toast("Reindirizzamento alla dashboard...")
+
+            st.session_state['nome'] = user_data['first_name']
+            st.session_state['cognome'] = user_data['last_name']
+            st.session_state['authenticator'] = authenticator
+            st.switch_page("pages/1_home.py")
+        else:
+            st.error("⚠️ Errore: utente non trovato.")
+            st.session_state.clear()
+            st.rerun()
 
     elif st.session_state["authentication_status"] is False:
         st.error('❌ Username o password errati.')
