@@ -95,8 +95,6 @@ def home():
             if submit_button:
                 if new_password == confirm_password:
                     # Hash della nuova password
-                    hashed_password = stauth.Hasher([new_password]).hash(password=new_password)
-                    config["credentials"]["usernames"][username]["password"] = hashed_password
                     update_password(username, new_password)  # 🔄 Salva nel DB
                     st.success("✅ Password modificata con successo!")
                     st.session_state["show_password_form"] = False

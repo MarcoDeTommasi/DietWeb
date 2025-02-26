@@ -154,8 +154,8 @@ def update_password(username, new_password):
     
     username = username.lower()  # 🔹 Converte l'username in lowercase
 
-    hashed_password = stauth.Hasher([new_password]).generate()[0]  # 🔐 Hash della password
-
+    hashed_password = stauth.Hasher([new_password]).hash(password=new_password)
+    
     cursor.execute("UPDATE users SET password = ? WHERE username = ?", (hashed_password, username))
     conn.commit()
     conn.close()

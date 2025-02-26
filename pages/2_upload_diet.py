@@ -325,7 +325,10 @@ def upload_diet_page():
         if st.button("⬅️ Indietro"):
             st.switch_page("pages/1_home.py")
     # Placeholder per visualizzare errori in alto
-    error_container = st.container()
+    if "error_messages" not in st.session_state:
+        st.session_state["error_messages"] = None
+        
+    error_container = st.container()  
     if 'dict_lunch' not in st.session_state.keys():
         st.write("Trascina qui il file .pdf della tua dieta.")
         uploaded_file = st.file_uploader("Carica un file .pdf:", type=["pdf"], accept_multiple_files=False)
