@@ -23,7 +23,7 @@ def convert_to_dict_giorni(dict_lunch):
         for pasto, alimenti in pasti.items():
             for alimento, info in alimenti.items():
                 quantita = info['Quantità']
-                dict_giorni[giorno][alimento] = str(dict_giorni[giorno].get(alimento, 0)) + quantita
+                dict_giorni[giorno][alimento] = int(dict_giorni[giorno].get(alimento, 0)) + int(quantita)
                 
     return dict_giorni
 
