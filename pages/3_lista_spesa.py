@@ -15,7 +15,7 @@ mostra_sidebar()
 # Funzione che converte dict_lunch in dict_giorni
 def convert_to_dict_giorni(dict_lunch):
     dict_giorni = {}
-    
+    print(dict_lunch)
     for giorno, pasti in dict_lunch.items():
         dict_giorni[giorno] = {}
         
