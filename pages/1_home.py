@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime
 from utils_dicts import giorni_map
 from utils import get_food_emoji
-from utils_db import get_user,register_user,get_user_spesa
+from utils_db import get_user,register_user,get_user_spesa,update_password
 import json
 import streamlit_authenticator as stauth
 from yaml.loader import SafeLoader
@@ -97,7 +97,7 @@ def home():
                     # Hash della nuova password
                     hashed_password = stauth.Hasher([new_password]).hash(password=new_password)
                     config["credentials"]["usernames"][username]["password"] = hashed_password
-                    save_config(config)
+                    update_password(username, new_password)  # 🔄 Salva nel DB
                     st.success("✅ Password modificata con successo!")
                     st.session_state["show_password_form"] = False
                     st.rerun()  # Chiude il form dopo la modifica

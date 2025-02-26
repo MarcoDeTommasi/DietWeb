@@ -145,6 +145,20 @@ def get_users():
             "password": password  # La password è già hashata
         }
     return credentials
+
+
+def update_password(username, new_password):
+    """Aggiorna la password di un utente nel database"""
+    conn = sqlite3.connect("dieta.db")
+    cursor = conn.cursor()
+    
+    username = username.lower()  # 🔹 Converte l'username in lowercase
+
+    hashed_password = stauth.Hasher([new_password]).generate()[0]  # 🔐 Hash della password
+
+    cursor.execute("UPDATE users SET password = ? WHERE username = ?", (hashed_password, username))
+    conn.commit()
+    conn.close()
 # Esempio di utilizzo
 # df_diete = get_user_diets("test_user")
 # print(df_diete)
