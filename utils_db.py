@@ -19,7 +19,7 @@ def get_user(username):
     return None, None, None
 
 # Funzione per registrare un nuovo utente
-def register_user(nome, cognome, username):
+def register_diet(nome, cognome, username):
     conn = sqlite3.connect('dieta.db')
     c = conn.cursor()
     try:
@@ -155,7 +155,7 @@ def update_password(username, new_password):
     username = username.lower()  # 🔹 Converte l'username in lowercase
 
     hashed_password = stauth.Hasher([new_password]).hash(password=new_password)
-    
+
     cursor.execute("UPDATE users SET password = ? WHERE username = ?", (hashed_password, username))
     conn.commit()
     conn.close()
