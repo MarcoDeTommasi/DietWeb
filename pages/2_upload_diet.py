@@ -246,6 +246,7 @@ def edit_meal_data():
     """Permette all'utente di modificare la dieta passo dopo passo."""
     
     dict_lunch = st.session_state["dict_lunch"]
+    print(dict_lunch)
     days = list(dict_lunch.keys())
     meals = ["Colazione", "Pranzo", "Cena", "SpuntinoMattina", "SpuntinoPomeriggio"]
     meals_emoji = ["Colazione 🥐", "Pranzo 🍝", "Cena 🥩", "Spuntino Mattutino 🍎", "Merenda Pomeridiana 🍪"]

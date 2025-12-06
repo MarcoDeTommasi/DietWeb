@@ -144,6 +144,9 @@ def get_users():
             "email": email,
             "password": password  # La password è già hashata
         }
+
+    print(credentials)
+    
     return credentials
 
 
