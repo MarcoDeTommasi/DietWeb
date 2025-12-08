@@ -18,7 +18,6 @@ def home():
     cognome = st.session_state['cognome']
     dieta = get_user_diet(db, username)
     food_list = get_user_food_list(db, username)
-    print(f"Loaded food list for user {username}: {food_list}")
     if food_list is not None:
         st.session_state['food_list'] = food_list
     # Recupera Nome e Cognome dalla sessione per non perderli al refresh

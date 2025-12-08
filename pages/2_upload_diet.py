@@ -1,7 +1,5 @@
 import streamlit as st
-import fitz
 import pandas as pd
-import json
 from utils_db import  save_diet,save_food_list, get_db
 from sidebar import mostra_sidebar
 from upload_diet import extract_food_list, split_text_with_overlap, get_food_list_from_pdf,create_conversion_dict, convert_quantities_to_int
