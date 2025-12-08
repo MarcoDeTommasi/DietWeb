@@ -1,47 +1,45 @@
 import streamlit as st
 import streamlit_authenticator as stauth
-from utils_db import get_users,register_user
+from utils_db import authenticate_user, register_user, initialize_sqlite_db
 
-if __name__ == "__main__":
+def main():
     st.set_page_config(layout="wide")
 
-    # Recupera utenti dal database
-    config = {"credentials": get_users()}  
-    # Converte tutti gli username salvati in lowercase per sicurezza
-    config["credentials"]["usernames"] = {k.lower(): v for k, v in config["credentials"]["usernames"].items()}
+    # Inizializza il database SQLite
 
     # Configura l'autenticazione
     authenticator = stauth.Authenticate(
-        config['credentials'],
+        {"usernames": {}},  # Configurazione vuota, verrà gestita dinamicamente
         "streamlit_auth",
         "random_signature_key",
         30
     )
 
     # Effettua il login
-    try:
-        authenticator.login()
-    except Exception as e:
-        st.error(e)
+    with st.form("login_form"):
+        st.subheader("Effettua il login")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        login_button = st.form_submit_button("Login")
 
-    if st.session_state.get("username"):
-        st.session_state["username"] = st.session_state["username"].lower() 
+    if login_button:
+        if authenticate_user(username, password):
+            st.success(f"Benvenuto, {username}!")
+            st.toast("Reindirizzamento alla dashboard...")
+            st.session_state["username"] = username
+            st.session_state["authenticator"] = authenticator
+            st.session_state["authentication_status"] = True
+            st.switch_page("pages/1_home.py")
+        else:
+            st.error("❌ Username o password errati.")
 
-    if st.session_state["authentication_status"]:
-        st.title(f'Benvenuto, {config["credentials"]["usernames"][st.session_state["username"]]["first_name"]}!')
-        st.toast("Reindirizzamento alla dashboard...")
+    # Mostra il modulo di registrazione
+    show_registration_form()
 
-        st.session_state['nome'] = config["credentials"]["usernames"][st.session_state["username"]]['first_name']
-        st.session_state['cognome'] = config["credentials"]["usernames"][st.session_state["username"]]['last_name']
-        st.session_state['authenticator'] = authenticator
-        st.switch_page("pages/1_home.py")
-
-    elif st.session_state["authentication_status"] is False:
-        st.error('❌ Username o password errati.')
-    elif st.session_state["authentication_status"] is None:
-        st.warning('⚠️ Inserisci username e password.')
-
-    # Form di registrazione
+def show_registration_form():
+    """
+    Mostra il modulo di registrazione per nuovi utenti.
+    """
     if "show_register_form" not in st.session_state:
         st.session_state["show_register_form"] = False
 
@@ -49,6 +47,7 @@ if __name__ == "__main__":
         st.session_state["show_register_form"] = True
 
     if st.session_state["show_register_form"]:
+        st.subheader("Modulo di Registrazione")
         with st.form("register_form"):
             new_name = st.text_input("Nome")
             new_surname = st.text_input("Cognome")
@@ -61,7 +60,13 @@ if __name__ == "__main__":
         if submit_button:
             if new_password != confirm_password:
                 st.error("❌ Le password non corrispondono!")
+            elif not new_username or not new_password:
+                st.error("❌ Tutti i campi sono obbligatori!")
             else:
                 register_user(new_username, new_name, new_surname, new_email, new_password)
+                st.success("✅ Registrazione completata con successo!")
                 st.session_state["show_register_form"] = False  # Nasconde il form dopo la registrazione
                 st.rerun()
+
+if __name__ == "__main__":
+    main()

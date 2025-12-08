@@ -1,14 +1,82 @@
 from utils_dicts import emoji_map
 import sqlite3
 import streamlit as st
+import json
+import unicodedata
+import spacy
+from openai import OpenAI
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
+
+client = OpenAI(
+    base_url=os.getenv("OPENROUTER_API_URL"),
+    api_key=os.getenv("OPENROUTER_API_KEY"),  # Assicurati che OPENROUTER_API_KEY sia definito
+)
+# Inizializza il convertitore per singolari/plurali
+nlp = spacy.load("it_core_news_sm")
+
+def to_singular(word):
+    """Converte una parola al singolare usando la lemmatizzazione."""
+    doc = nlp(word)
+    for token in doc:
+        return token.lemma_
+
+def normalize_key(key):
+    """Normalizza una chiave del dizionario."""
+    # Rimuove accenti
+    key = ''.join(
+        c for c in unicodedata.normalize('NFD', key)
+        if unicodedata.category(c) != 'Mn'
+    )
+    # Converte in minuscolo e sostituisce spazi con _
+    key = key.lower().replace(' ', '_')
+    # Converte al singolare
+    key = to_singular(key)
+    return key
+
+def normalize_dict(input_dict):
+    """Normalizza tutte le chiavi di un dizionario."""
+    return {normalize_key(k): v for k, v in input_dict.items()}
+
+
+def query_llm(prompt):
+    """Invia una query ad un llm tramite OpenRouter."""
+    try:
+        completion = client.chat.completions.create(
+            extra_headers={
+                "X-Title": "DietWebApp",  # Sostituisci con il nome del tuo sito/app
+            },
+            model="openai/gpt-4o",  # Specifica il modello Gemma 3
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            max_tokens=200,
+            temperature=0
+        )
+        # Restituisce il contenuto della risposta
+        if hasattr(completion, "choices"):
+            return completion.choices[0].message.content
+        elif isinstance(completion, dict):
+            return completion["choices"][0]["message"]["content"]
+    except Exception as e:
+        raise Exception(f"Errore durante la query all llm: {str(e)}")
 
 def get_food_emoji(food_name):
-    # Dizionario che associa ogni tipo di cibo a un'emoji
-    # Rimuove gli underscore e aggiunge l'emoji
-    readable_name = food_name.replace("_", " ")
-    emoji = emoji_map.get(readable_name, "🥗")  # Usa "🍴" come emoji predefinita
-    return f"{emoji}"
+    """
+    Cerca se una delle parole nella lista si trova nella stringa fornita e restituisce l'emoji corrispondente.
+    """
+    # Cerca una corrispondenza parziale nel dizionario delle emoji
+    for key, emoji in emoji_map.items():
+        if key in food_name:  # Confronto case-insensitive
+            return f"{emoji}"
+
+    # Emoji predefinita se non ci sono corrispondenze
+    return "🥗"
 
 # Template del prompt
 template = """Ti darò un piano alimentare personalizzato per un utente. In questo piano sono presenti le linee guida alimentari per ogni giorno della settimana e per ogni pasto.
