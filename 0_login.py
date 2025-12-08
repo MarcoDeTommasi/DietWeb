@@ -1,11 +1,10 @@
 import streamlit as st
 import streamlit_authenticator as stauth
-from utils_db import authenticate_user, register_user, initialize_sqlite_db
+from utils_db import authenticate_user, register_user
+from database import get_db
 
 def main():
     st.set_page_config(layout="wide")
-
-    # Inizializza il database SQLite
 
     # Configura l'autenticazione
     authenticator = stauth.Authenticate(
@@ -23,15 +22,20 @@ def main():
         login_button = st.form_submit_button("Login")
 
     if login_button:
-        if authenticate_user(username, password):
-            st.success(f"Benvenuto, {username}!")
-            st.toast("Reindirizzamento alla dashboard...")
-            st.session_state["username"] = username
-            st.session_state["authenticator"] = authenticator
-            st.session_state["authentication_status"] = True
-            st.switch_page("pages/1_home.py")
-        else:
-            st.error("❌ Username o password errati.")
+        db = next(get_db())
+        try:
+            print(f"Attempting login for user: {username}")
+            if authenticate_user(db, username, password):
+                st.success(f"Benvenuto, {username}!")
+                st.toast("Reindirizzamento alla dashboard...")
+                st.session_state["username"] = username
+                st.session_state["authenticator"] = authenticator
+                st.session_state["authentication_status"] = True
+                st.switch_page("pages/1_home.py")
+            else:
+                st.error("❌ Username o password errati.")
+        except Exception as e:
+            st.error(f"⚠️ Si è verificato un errore durante il login: {e}")
 
     # Mostra il modulo di registrazione
     show_registration_form()
@@ -58,15 +62,19 @@ def show_registration_form():
             submit_button = st.form_submit_button("Registrati")
 
         if submit_button:
-            if new_password != confirm_password:
-                st.error("❌ Le password non corrispondono!")
-            elif not new_username or not new_password:
-                st.error("❌ Tutti i campi sono obbligatori!")
-            else:
-                register_user(new_username, new_name, new_surname, new_email, new_password)
-                st.success("✅ Registrazione completata con successo!")
-                st.session_state["show_register_form"] = False  # Nasconde il form dopo la registrazione
-                st.rerun()
+            try:
+                if new_password != confirm_password:
+                    st.error("❌ Le password non corrispondono!")
+                elif not new_username or not new_password:
+                    st.error("❌ Tutti i campi sono obbligatori!")
+                else:
+                    db = next(get_db())
+                    register_user(db,new_username, new_name, new_surname, new_email, new_password)
+                    st.success("✅ Registrazione completata con successo!")
+                    st.session_state["show_register_form"] = False  # Nasconde il form dopo la registrazione
+                    st.rerun()
+            except Exception as e:
+                st.error(f"⚠️ Si è verificato un errore durante la registrazione: {e}")
 
 if __name__ == "__main__":
     main()

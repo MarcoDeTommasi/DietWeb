@@ -12,10 +12,7 @@ def determina_pasto_corrente():
         return "Cena"
 
 def suggerisci_pasti(dict_lunch, giorno, pasti_selezionati, food_list,  include_spuntini=False):
-    if type(dict_lunch) is not dict and type(dict_lunch) is str:
-        import json
-        dict_lunch = json.loads(dict_lunch)
-        conversion_dict = create_conversion_dict(food_list)
+    conversion_dict = create_conversion_dict(food_list)
         
     pasti_del_giorno = dict_lunch.get(giorno, {})
     pasti_principali = ""

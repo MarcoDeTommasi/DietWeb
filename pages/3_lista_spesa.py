@@ -3,7 +3,7 @@ import streamlit as st
 import numpy as np
 from datetime import datetime
 from utils import get_food_emoji
-from utils_db import save_spesa
+from utils_db import save_spesa,get_db
 from utils_dicts import list_of_meals
 from sidebar import mostra_sidebar
 import json
@@ -160,7 +160,8 @@ def main():
         with col3:
             if st.button("💾 Spesa nello storico"):
                 date_now = datetime.now().strftime("%Y-%m-%d")
-                if save_spesa(st.session_state['username'], date_now, lista_spesa):
+                db = next(get_db())
+                if save_spesa(db, st.session_state['username'], date_now, lista_spesa):
                     st.success("🛒 Lista della spesa salvata con successo!")
                 else:
                     st.error("Errore nel salvataggio 💾")

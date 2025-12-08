@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+from database import get_db
 from utils_db import get_user_spesa
 from utils import get_food_emoji
 from sidebar import mostra_sidebar
@@ -9,10 +10,12 @@ from upload_diet import create_conversion_dict
 st.set_page_config(layout="wide")
 st.session_state['pagina_corrente']="analytics"
 mostra_sidebar()
+db = next(get_db())
+
 
 def analitics_eval():
     # Supponiamo che la lista contenga elementi con dict_spesa e data
-    lista_spesa = get_user_spesa(st.session_state["username"])  # Lista di tuple (dict_spesa, data)
+    lista_spesa = get_user_spesa(db, st.session_state["username"])  # Lista di tuple (dict_spesa, data)
 
     # Creiamo una lista per costruire il DataFrame
     data_for_df = []
@@ -177,7 +180,7 @@ if __name__ == "__main__":
     if "authentication_status" in st.session_state.keys() and st.session_state["authentication_status"]:
         
         if 'username' in st.session_state.keys() and 'dict_lunch' in st.session_state.keys():
-            if len(get_user_spesa(st.session_state['username']))>0:
+            if len(get_user_spesa(db, st.session_state['username']))>0:
                 analitics_eval()
             else: 
                 st.error("❌ Errore nel caricamento della pagina! Dati Insufficienti!")

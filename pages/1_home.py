@@ -2,7 +2,7 @@ import streamlit as st
 from datetime import datetime
 from utils_dicts import giorni_map
 from utils import get_food_emoji
-from utils_db import get_user_diet,get_user_name,get_user_spesa,update_password,get_user_food_list
+from utils_db import get_user_diet,get_user_name,get_user_spesa,update_password,get_db,get_user_food_list
 from sidebar import mostra_sidebar
 from datetime import datetime
 from home import determina_pasto_corrente, suggerisci_pasti
@@ -10,14 +10,15 @@ from home import determina_pasto_corrente, suggerisci_pasti
 st.set_page_config(layout="wide")
 
 def home():
-
+    db = next(get_db())
     username = st.session_state['username']
     st.session_state['pagina_corrente']= "home"
-    st.session_state['nome'], st.session_state['cognome'] = get_user_name(username)
+    st.session_state['nome'], st.session_state['cognome'] = get_user_name(db, username)
     nome = st.session_state['nome']
     cognome = st.session_state['cognome']
-    dieta = get_user_diet(username)
-    food_list = get_user_food_list(username)
+    dieta = get_user_diet(db, username)
+    food_list = get_user_food_list(db, username)
+    print(f"Loaded food list for user {username}: {food_list}")
     if food_list is not None:
         st.session_state['food_list'] = food_list
     # Recupera Nome e Cognome dalla sessione per non perderli al refresh

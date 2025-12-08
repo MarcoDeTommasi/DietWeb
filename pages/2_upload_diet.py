@@ -2,7 +2,7 @@ import streamlit as st
 import fitz
 import pandas as pd
 import json
-from utils_db import  save_diet,save_food_list
+from utils_db import  save_diet,save_food_list, get_db
 from sidebar import mostra_sidebar
 from upload_diet import extract_food_list, split_text_with_overlap, get_food_list_from_pdf,create_conversion_dict, convert_quantities_to_int
 from utils_dicts import list_of_days, list_of_meals, unit_options
@@ -125,7 +125,6 @@ def check_invalid_quantities(d,error_container):
     return True  # Indica che è tutto ok
 
 def upload_diet_page():
- 
     col1, col2 = st.columns([9, 1])
     with col1:
         st.title("📤 Carica la tua Dieta")
@@ -225,7 +224,8 @@ def upload_diet_page():
             if st.button("💾 Salva e Invia"):
                 is_valid = check_invalid_quantities(st.session_state['dict_lunch'],error_container)
                 if is_valid:  # Se tutto è OK, procede con il salvataggio
-                    if save_diet(st.session_state['username'], st.session_state['dict_lunch']) and save_food_list(st.session_state['username'], st.session_state['food_list']):
+                    db = next(get_db())
+                    if save_diet(db, st.session_state['username'], st.session_state['dict_lunch']) and save_food_list(db, st.session_state['username'], st.session_state['food_list']):
                         st.success("✅ Dati salvati con successo!")
                         st.switch_page("pages/1_home.py")
                 else:
