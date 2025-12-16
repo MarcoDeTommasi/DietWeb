@@ -67,7 +67,7 @@ def home():
             st.divider()
             st.subheader("2. 📊 Guarda le analitiche di Acquisto!")
             if st.button("Vai alle Analitiche"):
-                if len(get_user_spesa(username))>1:
+                if len(get_user_spesa(db,username))>1:
                     st.switch_page('pages/4_analytics.py')
                 else:
                     st.error("❌ Sezione Accessibile con almeno 2 spese effettuate e salvate!")
