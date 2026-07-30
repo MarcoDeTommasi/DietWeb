@@ -1,193 +1,127 @@
-import pandas as pd
-import streamlit as st
+from __future__ import annotations
+
+import logging
+
 import plotly.express as px
-from database import get_db
-from utils_db import get_user_spesa
-from utils import get_food_emoji
-from sidebar import mostra_sidebar
-from upload_diet import create_conversion_dict
+import streamlit as st
 
-st.set_page_config(layout="wide")
-st.session_state['pagina_corrente']="analytics"
-mostra_sidebar()
-db = next(get_db())
+from dietapp.analytics import filter_period, purchases_to_frame
+from dietapp.database import session_scope
+from dietapp.domain import get_food_emoji
+from dietapp.repositories import RepositoryError, get_user_purchases
+from dietapp.ui import render_sidebar, require_authentication
 
 
-def analitics_eval():
-    # Supponiamo che la lista contenga elementi con dict_spesa e data
-    lista_spesa = get_user_spesa(db, st.session_state["username"])  # Lista di tuple (dict_spesa, data)
-
-    # Creiamo una lista per costruire il DataFrame
-    data_for_df = []
-    for dict_spesa, data in lista_spesa:
-        # Aggiungi ogni elemento come una riga del DataFrame
-        data_for_df.append({"Lista Spesa": dict_spesa, "Data": data})
-
-    # Creiamo il DataFrame
-    df_spesa = pd.DataFrame(data_for_df)
-    # Convertiamo la colonna 'Data' in formato datetime
-    df_spesa['Data'] = pd.to_datetime(df_spesa['Data'], format="%Y-%m-%d", errors='coerce', utc=True)
-    # Rimuoviamo le righe con valori NaT nella colonna 'Data'
-    df_spesa = df_spesa.dropna(subset=['Data'])
-    
-    food_list = st.session_state.get('food_list', [])
-    converted_dict = create_conversion_dict(food_list)
-
-    flattened_data = []
-    # Iteriamo attraverso ogni riga del DataFrame
-    for _, row in df_spesa.iterrows():
-        data = pd.to_datetime(row['Data'])
-        # Normalizziamo le chiavi del dizionario "Lista Spesa"
-        lista_spesa = {k: v for k, v in row['Lista Spesa'].items()}
-        
-        # Iteriamo attraverso ogni alimento nel dizionario "Lista_spesa"
-        for alimento, details in lista_spesa.items():
-            flattened_data.append({
-                "Alimento": alimento,
-                "Data": data,
-                "Mese": data.strftime('%m-%Y'),  # Usa strftime per formattare il mese
-                "Quantità": details["Quantità"],
-                "Unità": details["Unità"]
-            })
-
-    df_trend = pd.DataFrame(flattened_data)
-
-    df_trend = df_trend.groupby(['Mese', 'Alimento'])['Quantità'].sum().reset_index()
-
-    st.title("📊 Analisi degli Acquisti")
-    # 📉 **Andamento Consumo nel Tempo**
-
-    # 📉 Andamento Consumo nel Tempo (Aggregato Mensile con Unità)
-    st.subheader("📉 Andamento degli acquisti nel Tempo per Alimento")
-
-    # Creiamo un dizionario per mappare le unità di misura
-    unita_dict = {}
-    for _, row in df_spesa.iterrows():
-        for alimento, info in row['Lista Spesa'].items():
-            unita_dict[alimento] = info['Unità']
-
-    # Aggiungiamo la colonna 'Unità' a df_trend
-    df_trend['Unità'] = df_trend['Alimento'].map(unita_dict)
-    df_trend['Mese'] = df_trend['Mese'].astype(str)
-    df_trend['Alimento_Leggibile'] = df_trend['Alimento'].apply(lambda x: converted_dict.get(x, x))
-
-    # Selezione alimento
-    alimento_sel_leg = st.selectbox("Seleziona un alimento", df_trend['Alimento_Leggibile'].unique())
-    alimento_sel = df_trend[df_trend['Alimento_Leggibile'] == alimento_sel_leg]['Alimento'].iloc[0]
-
-    # Aggiungi emoji al nome dell'alimento selezionato
-    alimento_sel_emoji = get_food_emoji(alimento_sel)
-    alimento_sel_display = f"{alimento_sel_emoji} {alimento_sel_leg}"
-
-    # Filtriamo i dati per l'alimento selezionato
-    df_trend_selected = df_trend[df_trend['Alimento'] == alimento_sel]
-    df_trend_selected['Quantità'] = df_trend_selected['Quantità'].astype(float)
+LOGGER = logging.getLogger(__name__)
 
 
-    # Creiamo il grafico con un solo punto per mese
+def main() -> None:
+    st.set_page_config(
+        page_title="Analisi acquisti · DietApp", page_icon="📊", layout="wide"
+    )
+    if not require_authentication():
+        st.stop()
+    render_sidebar("Analisi acquisti")
+
+    header, back = st.columns([8, 1])
+    with header:
+        st.title("📊 Analisi degli acquisti")
+    with back:
+        if st.button("← Dashboard"):
+            st.switch_page("pages/1_home.py")
+
+    try:
+        with session_scope() as db:
+            records = get_user_purchases(db, st.session_state["username"])
+    except RepositoryError:
+        LOGGER.exception("Purchase history loading failed")
+        st.error("Non è stato possibile caricare lo storico.")
+        return
+
+    frame = purchases_to_frame(records)
+    if frame.empty:
+        st.info("Non ci sono ancora dati validi da analizzare.")
+        return
+
+    metric_1, metric_2 = st.columns(2)
+    metric_1.metric("Liste salvate", frame["Acquisto"].nunique())
+    metric_2.metric("Alimenti diversi", frame["Alimento"].nunique())
+
+    st.subheader("Andamento mensile")
+    options = (
+        frame[["Alimento", "Alimento leggibile", "Unità"]]
+        .drop_duplicates()
+        .sort_values(["Alimento leggibile", "Unità"])
+    )
+    options["Etichetta"] = (
+        options["Alimento leggibile"] + " (" + options["Unità"] + ")"
+    )
+    selected_label = st.selectbox("Alimento", options["Etichetta"].tolist())
+    selected = options.loc[options["Etichetta"] == selected_label].iloc[0]
+    trend_source = frame.loc[
+        (frame["Alimento"] == selected["Alimento"])
+        & (frame["Unità"] == selected["Unità"])
+    ].copy()
+    trend_source["Mese"] = trend_source["Data"].dt.to_period("M").astype(str)
+    trend = trend_source.groupby("Mese", as_index=False)["Quantità"].sum()
     fig_trend = px.line(
-        df_trend_selected, 
-        x='Mese', 
-        y='Quantità', 
-        title=f'Acquisto di "{alimento_sel_display}" storico', 
+        trend,
+        x="Mese",
+        y="Quantità",
         markers=True,
-        text=df_trend_selected['Quantità']
+        text="Quantità",
+        title=(
+            f"{get_food_emoji(selected['Alimento'])} {selected_label} · "
+            "quantità acquistata"
+        ),
     )
-
-    # Aggiorniamo le etichette dell'asse Y
     fig_trend.update_traces(textposition="top center")
-
-    # Aggiorniamo l'asse X per mostrare solo mese e anno
-    fig_trend.update_xaxes(
-        type='category',
-        title="Mese e Anno"
-    )
-    fig_trend.update_yaxes(
-        type='linear',
-        title=f"Quantità ({str( df_trend_selected.iloc[0]['Unità'])})"
-    )
-
+    fig_trend.update_yaxes(title=f"Quantità ({selected['Unità']})")
     st.plotly_chart(fig_trend, width="stretch")
 
-    # 📊 Classifica Cibi più Consumati
-    # Selezione intervallo temporale
-    # 🏆 **Classifica Cibi Più Acquistati (per frequenza)**
-    st.subheader(f"🏆 Classifica Cibi più Acquistati")
+    st.subheader("Alimenti acquistati più spesso")
+    period_label = st.selectbox(
+        "Periodo", ["Tutto lo storico", "Ultimi 3 mesi", "Ultimo mese"]
+    )
+    months = {
+        "Tutto lo storico": None,
+        "Ultimi 3 mesi": 3,
+        "Ultimo mese": 1,
+    }[period_label]
+    filtered = filter_period(frame, months)
+    if filtered.empty:
+        st.info("Nessun acquisto nel periodo selezionato.")
+        return
 
-    intervallo_sel = st.selectbox("Seleziona intervallo temporale", ["Overall", "Ultimi 3 Mesi", "Ultimo Mese"])
-
-    # Calcoliamo la data di oggi
-
-    mese_corrente = pd.to_datetime("today").month
-    anno_corrente = pd.to_datetime("today").year
-
-    # Filtriamo in base all'intervallo temporale
-    if intervallo_sel == "Ultimi 3 Mesi":
-        df_filtrato = df_trend[
-            df_trend['Mese'].apply(lambda x: int(x.split('-')[0])) >= (mese_corrente - 3)
+    ranking = (
+        filtered.groupby(["Alimento", "Alimento leggibile"], as_index=False)[
+            "Acquisto"
         ]
-    elif intervallo_sel == "Ultimo Mese":
-        df_filtrato = df_trend[
-            df_trend['Mese'].apply(lambda x: int(x.split('-')[0])) == mese_corrente
-        ]
-    else:
-        df_filtrato = df_trend
-    # Controllo se il DataFrame filtrato è vuoto
-    if df_filtrato.empty:
-        st.warning(f"Nessun dato disponibile per l'intervallo temporale selezionato: {intervallo_sel}")
-    else:
-        # Conta quante volte ogni alimento appare nel periodo selezionato
-        df_classifica_frequenza = df_filtrato.groupby(['Alimento', 'Unità']).size().reset_index(name='Frequenza')
+        .nunique()
+        .rename(columns={"Acquisto": "Frequenza"})
+        .nlargest(10, "Frequenza")
+    )
+    ranking["Alimento"] = ranking.apply(
+        lambda row: f"{get_food_emoji(row['Alimento'])} {row['Alimento leggibile']}",
+        axis=1,
+    )
+    fig_ranking = px.bar(
+        ranking,
+        x="Alimento",
+        y="Frequenza",
+        text="Frequenza",
+        title=f"Presenza nelle liste · {period_label.lower()}",
+    )
+    fig_ranking.update_traces(textposition="outside")
+    fig_ranking.update_yaxes(title="Numero di liste")
+    st.plotly_chart(fig_ranking, width="stretch")
 
-        # Ordina gli alimenti per frequenza (dal più acquistato al meno acquistato)
-        df_classifica_frequenza = df_classifica_frequenza.sort_values('Frequenza', ascending=False)
+    with st.expander("Dati recenti"):
+        recent = frame.sort_values("Data", ascending=False)[
+            ["Data", "Alimento leggibile", "Quantità", "Unità"]
+        ].head(100)
+        st.dataframe(recent, hide_index=True, width="stretch")
 
-        # Selezioniamo solo i top 5 alimenti
-        df_classifica_frequenza = df_classifica_frequenza.head(5)
-        df_classifica_frequenza['Alimento_Leggibile'] = df_classifica_frequenza['Alimento'].apply(lambda x: converted_dict.get(x, x))
-
-        # Aggiungiamo l'emoji accanto al nome dell'alimento
-        df_classifica_frequenza['Alimento_Emoji'] = df_classifica_frequenza['Alimento'].apply(get_food_emoji)
-        df_classifica_frequenza['Alimento_Emoji'] = df_classifica_frequenza['Alimento_Emoji'] + " " + df_classifica_frequenza['Alimento_Leggibile']
-
-        # Creiamo la colonna con quantità etichettata per le unità
-        df_classifica_frequenza['Quantità_label'] = df_classifica_frequenza.apply(
-            lambda row: f"{row['Frequenza']} volte" if row['Unità'] == 'grammi' else f"{row['Frequenza']} volte",
-            axis=1
-        )
-
-        # **Grafico Classifica Cibi (per frequenza)**
-        fig_classifica_frequenza = px.bar(
-            df_classifica_frequenza, 
-            x='Alimento_Emoji', 
-            y='Frequenza', 
-            title=f"Cibi più Acquistati per Frequenza - {intervallo_sel}", 
-            text=df_classifica_frequenza['Quantità_label']
-        )
-
-        # Aggiorniamo l'asse X per mostrare solo mese e anno
-        fig_classifica_frequenza.update_xaxes(
-            type='category',
-            title="Alimento"
-        )
-
-        # Posizioniamo le etichette sopra le barre
-        fig_classifica_frequenza.update_traces(textposition="outside")
-
-        st.plotly_chart(fig_classifica_frequenza, width="stretch")
 
 if __name__ == "__main__":
-    if "authentication_status" in st.session_state.keys() and st.session_state["authentication_status"]:
-        
-        if 'username' in st.session_state.keys() and 'dict_lunch' in st.session_state.keys():
-            if len(get_user_spesa(db, st.session_state['username']))>0:
-                analitics_eval()
-            else: 
-                st.error("❌ Errore nel caricamento della pagina! Dati Insufficienti!")
-                if st.button("⬅️ Indietro"):
-                    st.switch_page("pages/1_home.py")
-        else:
-            st.error("❌ Errore nel caricamento della pagina! Username Invalido!")
-            
-    else:
-            st.error("❌ Not Authenticated! ")
+    main()
