@@ -4,11 +4,11 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from dietapp.models import StoricoSpesa, User
+from dietapp.models import FoodAlternative, StoricoSpesa, User
 from dietapp.security import (
     DUMMY_PASSWORD_HASH,
     hash_password,
@@ -171,4 +171,62 @@ def save_purchase(
         )
     )
     _commit(db)
+    return True
+
+
+def get_food_alternatives(
+    db: Session, username: str
+) -> list[dict[str, Any]]:
+    user = get_user(db, username)
+    if not user:
+        return []
+    rows = db.scalars(
+        select(FoodAlternative)
+        .where(FoodAlternative.username == user.username)
+        .order_by(
+            FoodAlternative.group_name,
+            FoodAlternative.food_name,
+            FoodAlternative.id,
+        )
+    ).all()
+    return [
+        {
+            "group_name": row.group_name,
+            "food_name": row.food_name,
+            "quantity": row.quantity,
+            "unit": row.unit,
+            "calories": row.calories,
+            "carbohydrates": row.carbohydrates,
+            "protein": row.protein,
+            "fats": row.fats,
+            "notes": row.notes,
+        }
+        for row in rows
+    ]
+
+
+def replace_food_alternatives(
+    db: Session, username: str, alternatives: list[Mapping[str, Any]]
+) -> bool:
+    user = get_user(db, username)
+    if not user:
+        return False
+    try:
+        db.execute(
+            delete(FoodAlternative).where(
+                FoodAlternative.username == user.username
+            )
+        )
+        db.add_all(
+            [
+                FoodAlternative(username=user.username, **dict(alternative))
+                for alternative in alternatives
+            ]
+        )
+        db.commit()
+    except SQLAlchemyError as error:
+        db.rollback()
+        raise RepositoryError(
+            "Salvataggio delle alternative alimentari non riuscito."
+        ) from error
     return True

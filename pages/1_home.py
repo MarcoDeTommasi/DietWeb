@@ -59,6 +59,32 @@ def render_meals(
                     f"{get_food_emoji(food)} {name}: "
                     f"{details.get('Quantità', '–')} {details.get('Unità', '')}"
                 )
+            if meal == "Pranzo" and foods:
+                preparation, alternative = st.columns(2)
+                with preparation:
+                    if st.button(
+                        "👩‍🍳 Come lo preparo?",
+                        key=f"prepare_{day}",
+                        width="stretch",
+                    ):
+                        st.session_state["meal_assistant_context"] = {
+                            "day": day,
+                            "meal": foods,
+                        }
+                        st.session_state["meal_assistant_pending"] = "preparation"
+                        st.switch_page("pages/6_assistente.py")
+                with alternative:
+                    if st.button(
+                        "🔄 Pasto alternativo",
+                        key=f"alternative_{day}",
+                        width="stretch",
+                    ):
+                        st.session_state["meal_assistant_context"] = {
+                            "day": day,
+                            "meal": foods,
+                        }
+                        st.session_state["meal_assistant_pending"] = "alternative"
+                        st.switch_page("pages/6_assistente.py")
 
     with snacks_column:
         st.subheader("Spuntini")
@@ -144,7 +170,7 @@ def main() -> None:
     st.session_state["dict_lunch"] = diet
     st.session_state["food_list"] = food_list
 
-    action_1, action_2, action_3 = st.columns(3)
+    action_1, action_2, action_3, action_4 = st.columns(4)
     with action_1:
         st.subheader("🛒 Lista della spesa")
         st.caption("Calcola cosa comprare in base a ciò che hai già.")
@@ -165,6 +191,11 @@ def main() -> None:
         if st.button("Modifica piano", width="stretch"):
             st.session_state["current_day"] = 0
             st.switch_page("pages/2_upload_diet.py")
+    with action_4:
+        st.subheader("🔄 Alternative")
+        st.caption("Definisci porzioni equivalenti per il chatbot.")
+        if st.button("Gestisci alternative", width="stretch"):
+            st.switch_page("pages/5_alternative.py")
 
     st.divider()
     st.subheader("Il piano del giorno")
