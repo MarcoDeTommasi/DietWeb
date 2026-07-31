@@ -20,6 +20,13 @@ class MealAssistantError(RuntimeError):
     pass
 
 
+def can_use_meal_assistant(
+    selected_meals: Sequence[str], meal: Mapping[str, Any]
+) -> bool:
+    """Allow meal actions only when one non-empty meal is being displayed."""
+    return len(selected_meals) == 1 and bool(meal)
+
+
 @lru_cache(maxsize=1)
 def _client() -> OpenAI:
     settings = get_settings()
@@ -52,6 +59,7 @@ def assistant_context(
     day: str,
     meal: Mapping[str, Any],
     alternatives: Sequence[Mapping[str, Any]],
+    meal_name: str = "Pranzo",
 ) -> dict[str, Any]:
     coverage = alternative_coverage(meal, alternatives)
     all_groups = group_alternatives(alternatives)
@@ -69,7 +77,7 @@ def assistant_context(
     }
     return {
         "day": day,
-        "meal_name": "Pranzo",
+        "meal_name": meal_name,
         "planned_meal": _serialisable_meal(meal),
         "alternative_groups": groups,
         "alternative_coverage": coverage,
@@ -81,18 +89,18 @@ def alternatives_notice(context: Mapping[str, Any]) -> str | None:
     if coverage["complete"]:
         return None
     if coverage["total_count"] == 0:
-        return "Il pranzo selezionato non contiene alimenti."
+        return "Il pasto selezionato non contiene alimenti."
     missing = ", ".join(
         readable_food_name(food) for food in coverage["missing"]
     )
     if coverage["covered_count"] == 0:
         return (
             "Non sono ancora presenti alternative collegate agli alimenti di "
-            "questo pranzo. Aggiungendo più gruppi equivalenti il suggerimento "
+            "questo pasto. Aggiungendo più gruppi equivalenti il suggerimento "
             "sarà più accurato."
         )
     return (
-        "Le alternative coprono solo una parte del pranzo. Per suggerimenti più "
+        "Le alternative coprono solo una parte del pasto. Per suggerimenti più "
         f"accurati aggiungi equivalenze per: {missing}."
     )
 
@@ -134,13 +142,13 @@ REGOLE VINCOLANTI:
 def initial_request(task: str) -> str:
     if task == "alternative":
         return (
-            "Genera un esempio di pranzo alternativo usando soltanto le "
+            "Genera un esempio di pasto alternativo usando soltanto le "
             "equivalenze disponibili. Mantieni invariati gli alimenti senza una "
             "sostituzione valida e indica chiaramente ogni cambio di porzione."
         )
     return (
         "Genera un esempio semplice e appetibile di preparazione per questo "
-        "pranzo, rispettando ingredienti e quantità del piano."
+        "pasto, rispettando ingredienti e quantità del piano."
     )
 
 

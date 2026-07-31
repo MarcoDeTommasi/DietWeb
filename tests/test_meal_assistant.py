@@ -6,6 +6,7 @@ from dietapp.meal_assistant import (
     alternatives_notice,
     assistant_context,
     build_system_prompt,
+    can_use_meal_assistant,
     generate_reply,
     initial_request,
 )
@@ -48,6 +49,20 @@ class MealAssistantTests(unittest.TestCase):
         context = assistant_context("Lunedì", self.meal, self.alternatives)
         self.assertIn("Carboidrati", context["alternative_groups"])
         self.assertNotIn("Gruppo non pertinente", context["alternative_groups"])
+
+    def test_context_preserves_selected_meal_name(self):
+        context = assistant_context(
+            "Lunedì", self.meal, self.alternatives, meal_name="Cena"
+        )
+        self.assertEqual(context["meal_name"], "Cena")
+        self.assertIn('"meal_name": "Cena"', build_system_prompt(context))
+
+    def test_actions_require_exactly_one_non_empty_meal(self):
+        self.assertTrue(can_use_meal_assistant(["Cena"], self.meal))
+        self.assertFalse(
+            can_use_meal_assistant(["Pranzo", "Cena"], self.meal)
+        )
+        self.assertFalse(can_use_meal_assistant(["Cena"], {}))
 
     def test_notice_identifies_missing_coverage(self):
         context = assistant_context("Lunedì", self.meal, self.alternatives)
