@@ -10,9 +10,11 @@ from dietapp.models import User
 from dietapp.migrations import migrate_legacy_passwords
 from dietapp.repositories import (
     authenticate_user,
+    get_food_alternatives,
     get_user_diet,
     get_user_purchases,
     register_user,
+    replace_food_alternatives,
     save_purchase,
     save_user_plan,
 )
@@ -78,6 +80,46 @@ class RepositoryTests(unittest.TestCase):
             user = db.scalar(select(User))
             self.assertTrue(is_password_hash(user.password))
             self.assertTrue(authenticate_user(db, "legacy", "OldPassword1"))
+
+    def test_food_alternatives_are_replaced_atomically(self):
+        with Session(self.engine) as db:
+            register_user(
+                db,
+                "mario",
+                "Mario",
+                "Rossi",
+                "mario@example.com",
+                "Password1",
+            )
+            rows = [
+                {
+                    "group_name": "Carboidrati",
+                    "food_name": "pasta",
+                    "quantity": 80.0,
+                    "unit": "g",
+                    "calories": None,
+                    "carbohydrates": None,
+                    "protein": None,
+                    "fats": None,
+                    "notes": None,
+                },
+                {
+                    "group_name": "Carboidrati",
+                    "food_name": "riso",
+                    "quantity": 100.0,
+                    "unit": "g",
+                    "calories": None,
+                    "carbohydrates": None,
+                    "protein": None,
+                    "fats": None,
+                    "notes": None,
+                },
+            ]
+            self.assertTrue(replace_food_alternatives(db, "mario", rows))
+            self.assertEqual(len(get_food_alternatives(db, "mario")), 2)
+
+            self.assertTrue(replace_food_alternatives(db, "mario", []))
+            self.assertEqual(get_food_alternatives(db, "mario"), [])
 
 
 if __name__ == "__main__":

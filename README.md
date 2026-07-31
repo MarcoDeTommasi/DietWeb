@@ -1,7 +1,8 @@
 # DietApp
 
 Applicazione Streamlit per gestire un piano alimentare, calcolare la lista della
-spesa in base alla dispensa e analizzare lo storico degli acquisti.
+spesa in base alla dispensa, analizzare lo storico e dialogare con un assistente
+che propone preparazioni o sostituzioni vincolate alle equivalenze dell'utente.
 
 ## Avvio locale
 
