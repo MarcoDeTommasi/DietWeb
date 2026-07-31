@@ -1,116 +1,185 @@
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+
 import streamlit as st
-from datetime import datetime
-from utils_dicts import giorni_map
-from utils import get_food_emoji
-from utils_db import get_user_diet,get_user_name,get_user_spesa,update_password,get_db,get_user_food_list
-from sidebar import mostra_sidebar
-from datetime import datetime
-from home import determina_pasto_corrente, suggerisci_pasti
 
-st.set_page_config(layout="wide")
+from dietapp.database import session_scope
+from dietapp.domain import (
+    DAYS,
+    ENGLISH_TO_ITALIAN_DAY,
+    conversion_dict,
+    get_food_emoji,
+)
+from dietapp.repositories import (
+    RepositoryError,
+    get_user_diet,
+    get_user_food_list,
+    get_user_name,
+    get_user_purchases,
+    update_password,
+)
+from dietapp.security import validate_password
+from dietapp.ui import render_sidebar, require_authentication
 
-def home():
-    db = next(get_db())
-    username = st.session_state['username']
-    st.session_state['pagina_corrente']= "home"
-    st.session_state['nome'], st.session_state['cognome'] = get_user_name(db, username)
-    nome = st.session_state['nome']
-    cognome = st.session_state['cognome']
-    dieta = get_user_diet(db, username)
-    food_list = get_user_food_list(db, username)
-    print(f"Loaded food list for user {username}: {food_list}")
-    if food_list is not None:
-        st.session_state['food_list'] = food_list
-    # Recupera Nome e Cognome dalla sessione per non perderli al refresh
-    mostra_sidebar()
 
-    st.title("🍽️ DietApp Web Version!")
-    st.write(f"Benvenuta/o {st.session_state['nome']}!")
-    st.write("Questa applicazione ti aiuterà a gestire la tua dieta e la tua lista della spesa.")
+LOGGER = logging.getLogger(__name__)
 
-    if "show_password_form" not in st.session_state:
-        st.session_state["show_password_form"] = False
 
-    # Bottone per mostrare il form di cambio password
-    if st.button("🔒 Cambia Password"):
-        st.session_state["show_password_form"] = True
+def current_meal(hour: int | None = None) -> str:
+    hour = datetime.now().hour if hour is None else hour
+    if hour < 11:
+        return "Colazione"
+    if hour < 16:
+        return "Pranzo"
+    return "Cena"
 
-    # Mostra il form solo se richiesto
-    if st.session_state["show_password_form"]:
-        with st.form("cambia_password_form"):
-            if st.session_state["authentication_status"]:
-                username = st.session_state["username"]  # Recupera l'utente loggato
-                
-                new_password = st.text_input("Nuova Password", type="password")
-                confirm_password = st.text_input("Conferma Password", type="password")
-                submit_button = st.form_submit_button("Cambia Password")
 
-            if submit_button:
-                if new_password == confirm_password:
-                    # Hash della nuova password
-                    update_password(username, new_password)  # 🔄 Salva nel DB
-                    st.success("✅ Password modificata con successo!")
-                    st.session_state["show_password_form"] = False
-                    st.rerun()  # Chiude il form dopo la modifica
-                else:
-                    st.error("❌ Le password non corrispondono!")
+def render_meals(
+    diet: dict,
+    day: str,
+    selected_meals: list[str],
+    food_list: list[str],
+) -> None:
+    labels = conversion_dict(food_list)
+    day_plan = diet.get(day, {})
+    main_column, snacks_column = st.columns(2)
 
-    if dieta is not None and food_list is not None:
-        st.session_state['dict_lunch'] = dieta
-        st.success(f"🎉 Dieta recuperata correttamente!")
-        col1,col2 = st.columns(2)
-        with col1:
-            st.divider()
-            st.subheader("1. 🛒 Genera la lista della spesa per la settimana!")
-            if st.button("Vai al Generatore"):
-                st.switch_page('pages/3_lista_spesa.py')
+    with main_column:
+        st.subheader("Pasti principali")
+        for meal in selected_meals:
+            foods = day_plan.get(meal, {})
+            st.markdown(f"**{meal}**")
+            if not foods:
+                st.caption("Nessun alimento inserito.")
+            for food, details in foods.items():
+                name = labels.get(food, food.replace("_", " ").title())
+                st.write(
+                    f"{get_food_emoji(food)} {name}: "
+                    f"{details.get('Quantità', '–')} {details.get('Unità', '')}"
+                )
 
-            st.divider()
-            st.subheader("2. 📊 Guarda le analitiche di Acquisto!")
-            if st.button("Vai alle Analitiche"):
-                if len(get_user_spesa(username))>1:
-                    st.switch_page('pages/4_analytics.py')
-                else:
-                    st.error("❌ Sezione Accessibile con almeno 2 spese effettuate e salvate!")
-            st.divider()
-            st.subheader("3. ✏️  Modifica la tua dieta esistente")
-            if st.button("Modifica Dieta"):
-                st.session_state["review_complete"] = False
-                st.session_state["current_day"] = 0
-                st.session_state['food_list'] = food_list
-                st.switch_page('pages/2_upload_diet.py')
-        with col2:
-            st.write("## 🍽️ Suggerimento per il prossimo pasto")
-            giorno_corrente = giorni_map[datetime.now().strftime("%A")]
-            giorno_selezionato = st.selectbox("Seleziona un giorno:", list(giorni_map.values()), index=list(giorni_map.values()).index(giorno_corrente))
+    with snacks_column:
+        st.subheader("Spuntini")
+        for meal in ("Spuntino Mattina", "Spuntino Pomeriggio"):
+            foods = day_plan.get(meal, {})
+            st.markdown(f"**{meal}**")
+            if not foods:
+                st.caption("Nessun alimento inserito.")
+            for food, details in foods.items():
+                name = labels.get(food, food.replace("_", " ").title())
+                st.write(
+                    f"{get_food_emoji(food)} {name}: "
+                    f"{details.get('Quantità', '–')} {details.get('Unità', '')}"
+                )
 
-            pasto_corrente = determina_pasto_corrente()
-            pasti_disponibili = ["Colazione", "Pranzo", "Cena"]
-            pasti_selezionati = st.multiselect("Seleziona i pasti da visualizzare:", pasti_disponibili, default=[pasto_corrente])
-            
-            col1, col2 = st.columns(2)
-            pasti_principali, spuntini = suggerisci_pasti(dieta, giorno_selezionato, pasti_selezionati, food_list, include_spuntini=True)
-            
-            with col1:
-                st.write("## 🍽️ Pasti Principali")
-                st.write(pasti_principali)
-            with col2:
-                st.write("## 🥪 Spuntini")
-                st.write(spuntini)
-    else:
-        # Username non trovato → Chiede Nome e Cognome
-        st.warning(f"⚠️ Dieta non ancora inserita per {nome} {cognome} (username: {username}).")
 
-        # Aggiorna i valori in sessione mentre vengono digitati
-        if nome and cognome and username:
-            if st.button("📤 Registra e Carica il tuo Piano Nutrizionale"):
-                st.switch_page("pages/2_upload_diet.py")
-        else:
-            st.info("➡️ Inserisci Nome e Cognome per continuare.")
+def load_dashboard_data(username: str):
+    with session_scope() as db:
+        name = get_user_name(db, username)
+        diet = get_user_diet(db, username)
+        foods = get_user_food_list(db, username)
+        purchase_count = len(get_user_purchases(db, username))
+    return name, diet, foods, purchase_count
+
+
+def password_form(username: str) -> None:
+    with st.expander("🔒 Sicurezza account"):
+        with st.form("change_password_form"):
+            current = st.text_input("Password attuale", type="password")
+            new = st.text_input("Nuova password", type="password")
+            confirmation = st.text_input("Conferma nuova password", type="password")
+            submitted = st.form_submit_button("Aggiorna password")
+        if submitted:
+            error = validate_password(new)
+            if error:
+                st.error(error)
+            elif new != confirmation:
+                st.error("Le nuove password non corrispondono.")
+            else:
+                try:
+                    with session_scope() as db:
+                        updated = update_password(db, username, current, new)
+                    if updated:
+                        st.success("Password aggiornata.")
+                    else:
+                        st.error("La password attuale non è corretta.")
+                except RepositoryError:
+                    LOGGER.exception("Password update failed")
+                    st.error("Aggiornamento non riuscito. Riprova.")
+
+
+def main() -> None:
+    st.set_page_config(page_title="Dashboard · DietApp", page_icon="🍽️", layout="wide")
+    if not require_authentication():
+        st.stop()
+
+    username = st.session_state["username"]
+    try:
+        (first_name, last_name), diet, food_list, purchase_count = (
+            load_dashboard_data(username)
+        )
+    except RepositoryError:
+        LOGGER.exception("Dashboard data loading failed")
+        st.error("Non è stato possibile caricare i tuoi dati.")
+        st.stop()
+
+    st.session_state["nome"] = first_name
+    st.session_state["cognome"] = last_name
+    render_sidebar("Dashboard")
+
+    st.title(f"🍽️ Ciao {first_name or username}")
+    st.caption("Gestisci il piano alimentare e prepara la prossima spesa.")
+    password_form(username)
+
+    if not diet or not food_list:
+        st.info("Inizia creando la lista degli alimenti e il tuo piano settimanale.")
+        if st.button("Crea il piano", type="primary"):
+            st.session_state["dict_lunch"] = diet or {}
+            st.session_state["food_list"] = food_list or []
+            st.switch_page("pages/2_upload_diet.py")
+        return
+
+    st.session_state["dict_lunch"] = diet
+    st.session_state["food_list"] = food_list
+
+    action_1, action_2, action_3 = st.columns(3)
+    with action_1:
+        st.subheader("🛒 Lista della spesa")
+        st.caption("Calcola cosa comprare in base a ciò che hai già.")
+        if st.button("Apri generatore", width="stretch", type="primary"):
+            st.switch_page("pages/3_lista_spesa.py")
+    with action_2:
+        st.subheader("📊 Analisi")
+        st.caption(f"{purchase_count} liste salvate nello storico.")
+        if st.button(
+            "Apri analisi",
+            width="stretch",
+            disabled=purchase_count == 0,
+        ):
+            st.switch_page("pages/4_analytics.py")
+    with action_3:
+        st.subheader("✏️ Piano alimentare")
+        st.caption("Aggiorna alimenti, quantità e unità.")
+        if st.button("Modifica piano", width="stretch"):
+            st.session_state["current_day"] = 0
+            st.switch_page("pages/2_upload_diet.py")
+
+    st.divider()
+    st.subheader("Il piano del giorno")
+    current_day = ENGLISH_TO_ITALIAN_DAY[datetime.now().strftime("%A")]
+    selector, meal_selector = st.columns([1, 2])
+    with selector:
+        day = st.selectbox("Giorno", DAYS, index=DAYS.index(current_day))
+    with meal_selector:
+        meal = st.multiselect(
+            "Pasti da mostrare",
+            ["Colazione", "Pranzo", "Cena"],
+            default=[current_meal()],
+        )
+    render_meals(diet, day, meal, food_list)
 
 
 if __name__ == "__main__":
-    if "authentication_status" in st.session_state.keys() and st.session_state["authentication_status"]:
-        home()
-    else:
-        st.error("❌ Not Authenticated! ")
+    main()

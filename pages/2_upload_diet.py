@@ -1,245 +1,238 @@
-import streamlit as st
-import fitz
+from __future__ import annotations
+
+import logging
+
 import pandas as pd
-import json
-from utils_db import  save_diet,save_food_list, get_db
-from sidebar import mostra_sidebar
-from upload_diet import extract_food_list, split_text_with_overlap, get_food_list_from_pdf,create_conversion_dict, convert_quantities_to_int
-from utils_dicts import list_of_days, list_of_meals, unit_options
+import streamlit as st
 
-st.set_page_config(layout="wide")
-st.session_state['pagina_corrente'] = "upload_diet"
-mostra_sidebar()
+from dietapp.database import session_scope
+from dietapp.domain import (
+    DAYS,
+    MEALS,
+    UNITS,
+    conversion_dict,
+    empty_diet,
+    normalise_food_name,
+    readable_food_name,
+    validate_diet,
+)
+from dietapp.pdf_import import PdfImportError, get_food_list_from_pdf
+from dietapp.repositories import RepositoryError, save_user_plan
+from dietapp.ui import render_sidebar, require_authentication
 
-def edit_meal_data():
-    """Permette all'utente di modificare la dieta passo dopo passo."""
-    
-    dict_lunch = st.session_state["dict_lunch"]
-    days = list(dict_lunch.keys())
-    reversed_converted_dict = {v: k for k, v in st.session_state['converted_food_dict'].items()}
-    current_day = days[st.session_state["current_day"]]
-    st.subheader(f"📅 Giorno: {current_day}")
-    
-    meal_data = dict_lunch[current_day]
-    
-    # Creiamo una disposizione delle tabelle in più colonne
-    cols = st.columns(3)  # 3 colonne per ogni riga
-    edited_data = {}  # Dizionario temporaneo per memorizzare i dati modificati
-    for idx, meal in enumerate(list_of_meals):
-        with cols[idx % 3]:  # Disposizione ciclica delle tabelle
-            st.write(f"### 🍽 {meal}")
-            data = []
-            for alimento, details in meal_data[meal].items():
-                alimento = st.session_state['converted_food_dict'].get(alimento, alimento)
-                quantity = details["Quantità"]
-                unit = details["Unità"]
-                data.append([alimento, quantity, unit])
 
-            # Creazione del DataFrame per il pasto
-            df = pd.DataFrame(data, columns=["Alimento", "Quantità", "Unità"])
-            # Mostriamo la tabella modificata 
-            edited_df = st.data_editor(df,
-                                       key=f"Data_editor_{current_day}_{meal}",
-                                       width="content",
-                                       column_config={
-                                            "Alimento": st.column_config.SelectboxColumn("Alimento", options=list(st.session_state['converted_food_dict'].values())),
-                                            "Quantità": st.column_config.NumberColumn("Quantità", format="%d", step=1,default=0),
-                                           "Unità": st.column_config.SelectboxColumn("Unità", options=['g', 'ml', 'pz']),
-                                       },
-                                       num_rows="dynamic")
+LOGGER = logging.getLogger(__name__)
 
-            meal_new_data = {}
-            for index, row in edited_df.iterrows():
-                alimento = row["Alimento"]
-                quantita = row["Quantità"]
-                unita = row["Unità"]
 
-                # Se `alimento` è una lista, prendi il primo elemento, altrimenti usa il valore direttamente
-                if isinstance(alimento, list):
-                    alimento = alimento[0] if alimento else ""  # Usa "" se la lista è vuota
-
-                # Se `quantita` è una lista, prendi il primo elemento, altrimenti usa il valore direttamente
-                if isinstance(quantita, list):
-                    quantita = quantita[0] if quantita else 0  # Usa 0 se la lista è vuota
-
-                # Se `unita` è una lista, prendi il primo elemento, altrimenti usa il valore direttamente
-                if isinstance(unita, list):
-                    unita = unita[0] if unita else "g"  # Usa "g" come valore predefinito
-
-                if pd.notna(alimento) and alimento.strip():  # Controlla che il nome dell'alimento non sia vuoto
-                    alimento = reversed_converted_dict.get(alimento, alimento)
-                    meal_new_data[alimento] = {
-                        "Quantità": 0 if pd.isna(quantita) else quantita,  # Se è NaN, metti 0
-                        "Unità": "g" if pd.isna(unita) or not unita else unita,  # Se è NaN o vuoto, metti "g"
-                    }
-
-                
-            # Salva meal_new_data in edited_data
-            edited_data[meal] = meal_new_data
-    col1, col2, col3 = st.columns([1, 4, 1])
-    
-    # Salvataggio delle modifiche nel dizionario solo quando l'utente preme uno dei bottoni
-    with col1:
-        if st.button("⬅️ Giorno Precedente", disabled=st.session_state['current_day'] == 0):
-            # Non aggiornare il dizionario, solo cambiamo il giorno
-            dict_lunch[current_day] = edited_data  # Salviamo i dati modificati nel dizionario
-            st.session_state["dict_lunch"] = dict_lunch  # Aggiorniamo il dizionario globale
-            st.session_state["current_day"] -= 1
-            st.rerun()
-    
-    with col3:
-        if st.button("✅ Conferma e Avanti"):
-            # Aggiorniamo il dizionario con i dati modificati solo quando l'utente conferma
-            dict_lunch[current_day] = edited_data  # Salviamo i dati modificati nel dizionario
-            st.session_state["dict_lunch"] = dict_lunch  # Aggiorniamo il dizionario globale
-            if st.session_state["current_day"] < len(days) - 1:
-                st.session_state["current_day"] += 1
-            else:
-                st.session_state["review_complete"] = True
-            st.rerun()
-
-def check_invalid_quantities(d,error_container):
-    """
-    Controlla se ci sono valori None nelle chiavi o quantità pari a 0/None.
-    Se trova errori, mostra un messaggio di errore e un DataFrame con i problemi.
-    """
-    invalid_entries = []
-
-    for day, meals in d.items():
-        for meal, foods in meals.items():
-            for alimento, details in foods.items():
-                if alimento is None or details["Quantità"] in [None, 0]:  
-                    invalid_entries.append([day, meal, alimento, details["Quantità"], details["Unità"]])
-
-    with error_container:  # Scrive nel container per restare visibile
-        st.empty()  # Reset dello spazio
-        if invalid_entries:
-            st.error("❌ Errore! Alcuni alimenti hanno quantità non valide (0 o None). Correggi prima di procedere.")
-            
-            # Creazione della tabella solo con le righe problematiche
-            df = pd.DataFrame(invalid_entries, columns=["📅 Giorno", "🍽 Pasto", "🥗 Alimento", "⚖️ Quantità", "📏 Unità"])
-            st.data_editor(df, key="invalid_entries")
-            
-            return False  # Indica che ci sono errori
-        
-    return True  # Indica che è tutto ok
-
-def upload_diet_page():
-    col1, col2 = st.columns([9, 1])
-    with col1:
-        st.title("📤 Carica la tua Dieta")
-    with col2:
-        if st.button("⬅️ Indietro"):
-            st.switch_page("pages/1_home.py")
-
-    if "current_day" not in st.session_state:
-        st.session_state["current_day"] = 0
-
-    # Placeholder per visualizzare errori in alto
-    if "error_messages" not in st.session_state:
-        st.session_state["error_messages"] = None
-    
-    if "dict_lunch" not in st.session_state.keys():
-        st.session_state["dict_lunch"] = {}
-        for day in list_of_days:
-            st.session_state["dict_lunch"][day] = {}
-            for meal in list_of_meals:
-                st.session_state["dict_lunch"][day][meal] = {}
-        st.rerun()
-
-    if 'food_list' not in st.session_state:
-        st.session_state['food_list'] = []
-    
-    error_container = st.container()  
-
-    if  len(st.session_state['food_list']) == 0 :
-        st.write("Trascina qui il file .pdf della tua dieta per acquisire in automatico la lista degli alimenti")
-        uploaded_file = st.file_uploader("Carica un file .pdf:", type=["pdf"], accept_multiple_files=False)
-
-        if uploaded_file is not None:
-            st.warning(f"🔄 Attendere l'elaborazione del documento '{uploaded_file.name}'..")
-            food_list = get_food_list_from_pdf(uploaded_file)
-            converted_food_dict = create_conversion_dict(food_list)
-            st.session_state['converted_food_dict'] = converted_food_dict
-            st.session_state['food_list'] = food_list
-            st.rerun()
+def initialise_editor() -> None:
+    existing = st.session_state.get("dict_lunch")
+    if not isinstance(existing, dict) or not existing:
+        st.session_state["dict_lunch"] = empty_diet()
     else:
-        st.success("✅ Lista degli alimenti gia caricata con successo!")
-        st.session_state['converted_food_dict'] = create_conversion_dict(st.session_state['food_list'])
-
-    # Mostra la lista degli alimenti in un editor interattivo
-    st.subheader("Modifica la lista degli alimenti")
-
-    st.session_state['converted_food_dict'] = create_conversion_dict(st.session_state['food_list'])
-
-    converted_food_dict = st.session_state['converted_food_dict']
-    food_list = st.session_state['food_list']
-
-    # Creazione di un DataFrame per mostrare la converted_food_dict
-    if len(converted_food_dict) > 0:
-        food_df = pd.DataFrame({"Alimenti": list(converted_food_dict.values())})
-    else:
-        # Inizializza un DataFrame vuoto con la colonna "Alimenti"
-        food_df = pd.DataFrame({"Alimenti": [""]})
-
-    # Editor per modificare la lista
-    edited_food_df = st.data_editor(
-        food_df,
-        num_rows="dynamic",  # Permette di aggiungere o rimuovere righe
-        width="content",
-        key="food_list_editor",
-        column_config={
-        "Alimenti": st.column_config.TextColumn("Alimenti")  # Configura la colonna come testo
-    }
+        complete = empty_diet()
+        for day in DAYS:
+            if isinstance(existing.get(day), dict):
+                for meal in MEALS:
+                    if isinstance(existing[day].get(meal), dict):
+                        complete[day][meal] = existing[day][meal]
+        st.session_state["dict_lunch"] = complete
+    st.session_state.setdefault("food_list", [])
+    st.session_state["current_day"] = min(
+        max(int(st.session_state.get("current_day", 0)), 0), len(DAYS) - 1
     )
 
-    # Salva le modifiche alla lista
-    if st.button("💾 Salva modifiche alla lista"):
-        # Aggiorna food_list e converted_food_dict
-        new_converted_food_dict = edited_food_df["Alimenti"].dropna().tolist()
-        new_food_list = []
 
-        # Controlla duplicati e aggiorna food_list e converted_food_dict
-        for item in new_converted_food_dict:
-            item_coded = item.lower().replace(" ", "_")
-            if item_coded not in new_food_list:  # Evita duplicati
-                new_food_list.append(item_coded)
-
-        # Verifica se ci sono duplicati nella lista leggibile
-        if len(new_converted_food_dict) != len(set(new_converted_food_dict)):
-            st.error("❌ La lista contiene duplicati! Rimuovili prima di salvare.")
-        else:
-            # Salva le liste aggiornate nello stato della sessione
-            st.session_state['food_list'] = new_food_list
-            st.session_state['converted_food_dict'] = create_conversion_dict(new_food_list)
-            st.success("✅ Lista degli alimenti aggiornata con successo!")
-            st.rerun()
-    
-    st.subheader("📋 Inserisci o Modifica il piano Nutrizionale")
-
-    if "dict_lunch" in st.session_state.keys():
-        if "food_list" in st.session_state.keys() and len(st.session_state['food_list']) >0:
-            edit_meal_data()
-
-            if st.button("💾 Salva e Invia"):
-                is_valid = check_invalid_quantities(st.session_state['dict_lunch'],error_container)
-                if is_valid:  # Se tutto è OK, procede con il salvataggio
-                    db = next(get_db())
-                    if save_diet(db, st.session_state['username'], st.session_state['dict_lunch']) and save_food_list(db, st.session_state['username'], st.session_state['food_list']):
-                        st.success("✅ Dati salvati con successo!")
-                        st.switch_page("pages/1_home.py")
+def render_pdf_import() -> None:
+    with st.expander("Importa gli alimenti da PDF"):
+        st.caption(
+            "Il testo del PDF viene inviato al provider AI configurato per estrarre "
+            "i nomi degli alimenti. Il file non viene salvato dall’app. Quantità e "
+            "pasti restano sotto il tuo controllo."
+        )
+        uploaded = st.file_uploader(
+            "Piano alimentare in PDF",
+            type=["pdf"],
+            accept_multiple_files=False,
+        )
+        if st.button("Estrai alimenti", disabled=uploaded is None):
+            try:
+                with st.spinner("Analisi del documento…"):
+                    foods = get_food_list_from_pdf(uploaded.getvalue())
+                if not foods:
+                    st.warning("Nessun alimento riconosciuto.")
                 else:
-                    st.error("❌ Correggi gli errori prima di salvare i dati.")
+                    merged = sorted(set(st.session_state["food_list"]) | set(foods))
+                    st.session_state["food_list"] = merged
+                    st.success(f"Importati {len(foods)} alimenti.")
+                    st.rerun()
+            except PdfImportError as error:
+                st.error(str(error))
 
+
+def render_food_editor() -> None:
+    st.subheader("1. Alimenti")
+    current = [readable_food_name(food) for food in st.session_state["food_list"]]
+    frame = pd.DataFrame({"Alimento": current or [""]})
+    edited = st.data_editor(
+        frame,
+        num_rows="dynamic",
+        hide_index=True,
+        width="stretch",
+        key="food_list_editor",
+        column_config={"Alimento": st.column_config.TextColumn(required=True)},
+    )
+    if st.button("Applica lista alimenti"):
+        raw_values = [
+            str(value).strip()
+            for value in edited["Alimento"].dropna().tolist()
+            if str(value).strip()
+        ]
+        normalised = [normalise_food_name(value) for value in raw_values]
+        if len(normalised) != len(set(normalised)):
+            st.error("La lista contiene duplicati.")
+        elif not normalised:
+            st.error("Inserisci almeno un alimento.")
         else:
-            st.error("❌ La lista degli alimenti è vuota. Carica un file PDF o inserisci manualmente gli alimenti.")
+            st.session_state["food_list"] = normalised
+            st.success("Lista aggiornata.")
+            st.rerun()
+
+
+def day_editor() -> tuple[str, dict[str, dict]]:
+    day = DAYS[st.session_state["current_day"]]
+    labels = conversion_dict(st.session_state["food_list"])
+    reverse_labels = {label: code for code, label in labels.items()}
+    st.subheader(f"2. Piano · {day}")
+    edited_day: dict[str, dict] = {}
+    columns = st.columns(2)
+
+    for index, meal in enumerate(MEALS):
+        with columns[index % 2]:
+            st.markdown(f"**{meal}**")
+            data = [
+                [
+                    labels.get(food, readable_food_name(food)),
+                    details.get("Quantità", 0),
+                    details.get("Unità", "g"),
+                ]
+                for food, details in st.session_state["dict_lunch"][day][meal].items()
+            ]
+            frame = pd.DataFrame(data, columns=["Alimento", "Quantità", "Unità"])
+            edited = st.data_editor(
+                frame,
+                key=f"meal_editor_{day}_{meal}",
+                hide_index=True,
+                num_rows="dynamic",
+                width="stretch",
+                column_config={
+                    "Alimento": st.column_config.SelectboxColumn(
+                        options=list(labels.values()), required=True
+                    ),
+                    "Quantità": st.column_config.NumberColumn(
+                        min_value=0.0, step=1.0, required=True
+                    ),
+                    "Unità": st.column_config.SelectboxColumn(
+                        options=list(UNITS), required=True
+                    ),
+                },
+            )
+            meal_data: dict[str, dict] = {}
+            for _, row in edited.iterrows():
+                label = row.get("Alimento")
+                if pd.isna(label) or not str(label).strip():
+                    continue
+                code = reverse_labels.get(str(label), normalise_food_name(str(label)))
+                quantity = row.get("Quantità", 0)
+                unit = row.get("Unità", "g")
+                meal_data[code] = {
+                    "Quantità": 0 if pd.isna(quantity) else quantity,
+                    "Unità": "g" if pd.isna(unit) else unit,
+                }
+            edited_day[meal] = meal_data
+    return day, edited_day
+
+
+def apply_day(day: str, data: dict[str, dict]) -> None:
+    st.session_state["dict_lunch"][day] = data
+
+
+def main() -> None:
+    st.set_page_config(
+        page_title="Piano alimentare · DietApp", page_icon="✏️", layout="wide"
+    )
+    if not require_authentication():
+        st.stop()
+    render_sidebar("Piano alimentare")
+    initialise_editor()
+
+    header, back = st.columns([8, 1])
+    with header:
+        st.title("✏️ Piano alimentare")
+    with back:
+        if st.button("← Dashboard"):
+            st.switch_page("pages/1_home.py")
+
+    render_pdf_import()
+    render_food_editor()
+    if not st.session_state["food_list"]:
+        st.info("Aggiungi almeno un alimento per compilare il piano.")
+        return
+
+    day, edited_day = day_editor()
+    previous, progress, next_column = st.columns([1, 3, 1])
+    with previous:
+        if st.button(
+            "← Precedente",
+            disabled=st.session_state["current_day"] == 0,
+            width="stretch",
+        ):
+            apply_day(day, edited_day)
+            st.session_state["current_day"] -= 1
+            st.rerun()
+    with progress:
+        st.progress(
+            (st.session_state["current_day"] + 1) / len(DAYS),
+            text=f"Giorno {st.session_state['current_day'] + 1} di {len(DAYS)}",
+        )
+    with next_column:
+        if st.button(
+            "Successivo →",
+            disabled=st.session_state["current_day"] == len(DAYS) - 1,
+            width="stretch",
+        ):
+            apply_day(day, edited_day)
+            st.session_state["current_day"] += 1
+            st.rerun()
+
+    st.divider()
+    if st.button("Salva piano", type="primary", width="stretch"):
+        apply_day(day, edited_day)
+        errors = validate_diet(
+            st.session_state["dict_lunch"], st.session_state["food_list"]
+        )
+        if errors:
+            st.error("Correggi i dati non validi prima di salvare.")
+            with st.expander(f"Dettagli ({len(errors)})", expanded=True):
+                for error in errors[:30]:
+                    st.write(f"• {error}")
+        else:
+            try:
+                with session_scope() as db:
+                    saved = save_user_plan(
+                        db,
+                        st.session_state["username"],
+                        st.session_state["dict_lunch"],
+                        st.session_state["food_list"],
+                    )
+                if saved:
+                    st.success("Piano salvato.")
+                    st.switch_page("pages/1_home.py")
+                else:
+                    st.error("Utente non trovato. Effettua nuovamente il login.")
+            except RepositoryError:
+                LOGGER.exception("Diet save failed")
+                st.error("Salvataggio non riuscito. I dati nell’editor non sono persi.")
 
 
 if __name__ == "__main__":
-    if "authentication_status" in st.session_state.keys() and st.session_state["authentication_status"]:
-        if 'username' not in st.session_state.keys() or st.session_state['username'] is None:
-            st.error("❌ Errore nel caricamento della pagina, Username assente! ")
-        else:
-            upload_diet_page()
-    else:
-        st.error("❌ Not Authenticated! ")
+    main()
