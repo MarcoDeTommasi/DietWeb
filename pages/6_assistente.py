@@ -26,17 +26,27 @@ from dietapp.ui import render_sidebar, require_authentication
 LOGGER = logging.getLogger(__name__)
 
 
-def get_meal_selection(username: str) -> tuple[str, dict, list[dict]]:
+MAIN_MEALS = ("Colazione", "Pranzo", "Cena")
+
+
+def get_meal_selection(username: str) -> tuple[str, str, dict, list[dict]]:
     selected = st.session_state.get("meal_assistant_context", {})
     day = selected.get("day")
+    meal_name = selected.get("meal_name", "Pranzo")
     with session_scope() as db:
         diet = get_user_diet(db, username) or {}
         alternatives = get_food_alternatives(db, username)
     if day not in diet:
         day = ENGLISH_TO_ITALIAN_DAY[datetime.now().strftime("%A")]
-    meal = diet.get(day, {}).get("Pranzo", {})
-    st.session_state["meal_assistant_context"] = {"day": day, "meal": meal}
-    return day, meal, alternatives
+    if meal_name not in MAIN_MEALS:
+        meal_name = "Pranzo"
+    meal = diet.get(day, {}).get(meal_name, {})
+    st.session_state["meal_assistant_context"] = {
+        "day": day,
+        "meal_name": meal_name,
+        "meal": meal,
+    }
+    return day, meal_name, meal, alternatives
 
 
 def meal_frame(meal: dict) -> pd.DataFrame:
@@ -66,17 +76,17 @@ def ask_assistant(context: dict, request: str) -> None:
 
 def main() -> None:
     st.set_page_config(
-        page_title="Assistente del pranzo · DietApp",
+        page_title="Assistente del pasto · DietApp",
         page_icon="💬",
         layout="wide",
     )
     if not require_authentication():
         st.stop()
-    render_sidebar("Assistente del pranzo")
+    render_sidebar("Assistente del pasto")
 
     header, actions = st.columns([6, 2])
     with header:
-        st.title("💬 Assistente del pranzo")
+        st.title("💬 Assistente del pasto")
         st.caption(
             "Preparazioni e sostituzioni condividono la stessa conversazione."
         )
@@ -89,24 +99,26 @@ def main() -> None:
             st.rerun()
 
     try:
-        day, meal, alternatives = get_meal_selection(st.session_state["username"])
+        day, meal_name, meal, alternatives = get_meal_selection(
+            st.session_state["username"]
+        )
     except RepositoryError:
         LOGGER.exception("Assistant context loading failed")
-        st.error("Non è stato possibile caricare il pranzo e le alternative.")
+        st.error("Non è stato possibile caricare il pasto e le alternative.")
         return
 
     if not meal:
-        st.warning(f"Non ci sono alimenti nel pranzo di {day}.")
+        st.warning(f"Non ci sono alimenti per {meal_name.lower()} di {day}.")
         return
 
-    context = assistant_context(day, meal, alternatives)
-    st.subheader(f"Pranzo di {day}")
+    context = assistant_context(day, meal, alternatives, meal_name=meal_name)
+    st.subheader(f"{meal_name} di {day}")
     st.dataframe(meal_frame(meal), hide_index=True, width="stretch")
     notice = alternatives_notice(context)
     if notice:
         st.warning(notice)
     else:
-        st.success("Le alternative coprono tutti gli alimenti di questo pranzo.")
+        st.success("Le alternative coprono tutti gli alimenti di questo pasto.")
 
     preparation, alternative, manage = st.columns([1, 1, 1])
     with preparation:

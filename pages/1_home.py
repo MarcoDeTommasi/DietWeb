@@ -12,6 +12,7 @@ from dietapp.domain import (
     conversion_dict,
     get_food_emoji,
 )
+from dietapp.meal_assistant import can_use_meal_assistant
 from dietapp.repositories import (
     RepositoryError,
     get_user_diet,
@@ -59,16 +60,17 @@ def render_meals(
                     f"{get_food_emoji(food)} {name}: "
                     f"{details.get('Quantità', '–')} {details.get('Unità', '')}"
                 )
-            if meal == "Pranzo" and foods:
+            if can_use_meal_assistant(selected_meals, foods):
                 preparation, alternative = st.columns(2)
                 with preparation:
                     if st.button(
                         "👩‍🍳 Come lo preparo?",
-                        key=f"prepare_{day}",
+                        key=f"prepare_{day}_{meal}",
                         width="stretch",
                     ):
                         st.session_state["meal_assistant_context"] = {
                             "day": day,
+                            "meal_name": meal,
                             "meal": foods,
                         }
                         st.session_state["meal_assistant_pending"] = "preparation"
@@ -76,11 +78,12 @@ def render_meals(
                 with alternative:
                     if st.button(
                         "🔄 Pasto alternativo",
-                        key=f"alternative_{day}",
+                        key=f"alternative_{day}_{meal}",
                         width="stretch",
                     ):
                         st.session_state["meal_assistant_context"] = {
                             "day": day,
+                            "meal_name": meal,
                             "meal": foods,
                         }
                         st.session_state["meal_assistant_pending"] = "alternative"
